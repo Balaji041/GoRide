@@ -1,0 +1,32 @@
+{
+  "hero": {
+    "url": "https://images.unsplash.com/photo-1485291571150-772bcfc10da5?auto=format&fit=crop&w=2200&q=85",
+    "source": "https://unsplash.com/photos/black-sedan-FMbWFDiVRPs",
+    "photographer": "Samuele Errico Piccarini",
+    "license": "Unsplash License"
+  },
+  "dzire": {
+    "url": "https://upload.wikimedia.org/wikipedia/commons/1/1c/Maruti_Suzuki_Dzire_VXi_VVT.JPG",
+    "source": "https://commons.wikimedia.org/wiki/File:Maruti_Suzuki_Dzire_VXi_VVT.JPG",
+    "photographer": "Biswarup Ganguly",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "changes": "Cropped to fit vehicle card"
+  },
+  "baleno": {
+    "url": "https://upload.wikimedia.org/wikipedia/commons/d/d8/2022_Maruti_Suzuki_Baleno_Alpha_%28India%29_front_view_02.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:2022_Maruti_Suzuki_Baleno_Alpha_(India)_front_view_02.jpg",
+    "photographer": "Kannada DriveSpark",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "changes": "Cropped to fit vehicle card"
+  },
+  "i20": {
+    "url": "https://upload.wikimedia.org/wikipedia/commons/f/fe/2020_Hyundai_i20_1.5_Asta_%28O%29_Diesel_%28India%29_front_view.png",
+    "source": "https://commons.wikimedia.org/wiki/File:2020_Hyundai_i20_1.5_Asta_(O)_Diesel_(India)_front_view.png",
+    "photographer": "The Drivers Hub",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "changes": "Cropped to fit vehicle card"
+  }
+}

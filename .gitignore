@@ -1,0 +1,8 @@
+node_modules/
+mobile/.expo/
+mobile/export/
+mobile/dist/
+.env
+.env.*
+!.env.example
+.sites-runtime/
