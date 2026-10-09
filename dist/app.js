@@ -30,3 +30,11 @@ function show(next){index=(next+photos.length)%photos.length;picture.style.backg
 function pauseLabel(){$('hero-pause').textContent=paused?'Play slideshow':'Pause slideshow';$('hero-pause').setAttribute('aria-pressed',String(paused));}
 $('hero-dots').onclick=event=>{const button=event.target.closest('[data-hero-slide]');if(button)show(Number(button.dataset.heroSlide));};$('hero-pause').onclick=()=>{paused=!paused;pauseLabel();};hero.addEventListener('mouseenter',()=>hover=true);hero.addEventListener('mouseleave',()=>hover=false);hero.addEventListener('focusin',()=>hover=true);hero.addEventListener('focusout',event=>{if(!hero.contains(event.relatedTarget))hover=false;});
 const motion=matchMedia('(prefers-reduced-motion: reduce)');motion.addEventListener('change',()=>{if(motion.matches){paused=true;pauseLabel();}});show(0);pauseLabel();if(photos.length<2){document.querySelector('.hero-slideshow').hidden=true;return;}const timer=setInterval(()=>{if(!paused&&!hover&&!document.hidden)show(index+1);},6000);window.addEventListener('pagehide',()=>clearInterval(timer),{once:true});}catch{}}
+
+async function refreshCustomerHeader(){
+const link=document.getElementById('customer-header-link');if(!link)return;
+try{const response=await fetch('/api/customer/session',{credentials:'same-origin',cache:'no-store'});
+if(response.ok){const session=await response.json(),name=String(session.displayName||'Rider');link.textContent='Hi, '+name.charAt(0).toUpperCase()+name.slice(1);link.href='/account';link.title='Your GoRide account';link.setAttribute('aria-label',link.textContent+' · Open your account');link.classList.add('customer-signed-in');}
+else if(response.status===401){link.textContent='Sign in';link.href='/login';link.setAttribute('aria-label','Sign in to GoRide');link.classList.remove('customer-signed-in');}
+}catch{/* Keep the account link available when the session check is offline. */}}
+refreshCustomerHeader();window.addEventListener('pageshow',refreshCustomerHeader);window.addEventListener('focus',refreshCustomerHeader);

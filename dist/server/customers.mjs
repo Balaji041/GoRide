@@ -22,7 +22,11 @@ if(noticeMatch&&method==='PUT'){let noticeId;try{noticeId=decodeURIComponent(not
 if(path==='/api/admin/notifications/retry'&&method==='POST'){const input=await body(request);const notice=await db.prepare('SELECT id,delivery_status FROM notifications WHERE id=?').bind(input.id||'').first();if(!notice)throw new ApiError(404,'Notification not found.');if(!['unconfigured','failed'].includes(notice.delivery_status))throw new ApiError(409,'This message cannot be safely retried. Check provider logs if its status is unknown.');await notify(notice.id);return json({saved:true});}
 
 async function booking(id){const row=await db.prepare('SELECT * FROM bookings WHERE id=?').bind(id).first();if(!row||!admin&&row.customer_id!==customerId)throw new ApiError(404,'Booking not found.');return row;}
-if(path==='/api/customer/session'&&method==='GET')return json({email,phone:identity.phone,verifiedPhone:identity.verifiedPhone,verifiedEmail:identity.verifiedEmail||false,preview:identity.preview});
+if(path==='/api/customer/session'&&method==='GET'){
+const latest=await db.prepare('SELECT name FROM bookings WHERE customer_id=? ORDER BY created_at DESC,id DESC LIMIT 1').bind(customerId).first();
+const displayName=latest?.name?.trim().split(/\s+/)[0]||email.split('@')[0]?.replace(/[._-]+/g,' ').trim().split(/\s+/)[0]||'Rider';
+return json({email,displayName,phone:identity.phone,verifiedPhone:identity.verifiedPhone,verifiedEmail:identity.verifiedEmail||false,preview:identity.preview});}
+
 if((path==='/api/customer/bookings'||path==='/api/admin/bookings')&&method==='GET'){
 const rows=await (admin?db.prepare('SELECT * FROM bookings ORDER BY created_at DESC LIMIT 200'):db.prepare('SELECT * FROM bookings WHERE customer_id=? ORDER BY created_at DESC LIMIT 200').bind(customerId)).all();
 const bookings=await Promise.all(rows.results.map(async row=>{const docs=await db.prepare('SELECT id,kind,created_at FROM documents WHERE booking_id=?').bind(row.id).all();const cancellations=await db.prepare('SELECT id,reason,status,created_at,decision_at,decision_note FROM cancellation_requests WHERE booking_id=? ORDER BY created_at DESC,id DESC').bind(row.id).all();const {customer_id,...safe}=row;return {...safe,documents:docs.results,cancellations:cancellations.results};}));return json({bookings});}
