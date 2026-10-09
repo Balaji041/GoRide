@@ -13,6 +13,12 @@ assert.equal((await call('/api/admin/catalog','GET',undefined,{})).status,401);
 assert.equal((await call('/api/admin/catalog','GET',undefined,{'oai-authenticated-user-email':'other@example.com'})).status,403);
 assert.equal((await call('/api/admin/initialize','POST',{}, {...ownerHeaders,Origin:'https://evil.test'})).status,403);
 assert.equal((await call('/admin','GET',undefined,{})).status,302);
+for(const route of ['/admin','/admin/','/admin.html','/admin.js','/admin.css','/admin-customers.js']){
+assert.equal((await call(route,'GET',undefined,{'oai-authenticated-user-email':'customer@example.com'})).status,403,route);
+assert.equal((await call(route,'GET')).status,200,route);
+}
+const customerHome=await (await call('/','GET',undefined,{})).text();assert.doesNotMatch(customerHome,/href=["']\/admin|Owner dashboard/);
+
 let r=await call('/api/admin/initialize','POST',{});assert.equal(r.status,200);let data=await r.json();assert.equal(data.cars.length,3);assert.equal(data.locations.length,3);assert.equal(data.initialized,true);
 const original=data.cars.find(c=>c.id==='dzire');r=await call('/api/admin/cars/dzire','PUT',{...original,name:'GoRide Dzire',selfRate:2500,driverRate:3500,deposit:5000,notes:'250 km / day; fuel excluded.'});assert.equal(r.status,200);const changed=await r.json();assert.equal(changed.version,2);
 let customer=await (await call('/api/catalog','GET',undefined,{})).json();assert.equal(customer.cars.find(c=>c.id==='dzire').selfRate,2500);

@@ -53,15 +53,17 @@ npx expo export --platform android --platform ios --output-dir export
 
 Android and iOS JavaScript bundle exports verify compilation, not signed native binaries or device behavior. Apple Developer/Google Play accounts, unique identifiers, signing, device QA, icons, store disclosures and review are still pending.
 
-## Owner access inside the mobile app
+## Customer app and separate Admin Panel (1.3.0)
 
-In the updated GoRide app, tap **Owner** in the bottom navigation, then **Owner Login**. The app embeds the existing protected owner dashboard in a native WebView; it does not send the owner to an external dashboard URL or introduce a separate GoRide password. Sign in with the existing GoRide owner's ChatGPT account. Car, price, photo and location management reuse the same server-authorized dashboard and database.
+One customer app serves Android and iOS. It includes Explore, Cities, Help and Bookings. There is no owner tab, owner component or management screen in the customer app. Customer WebView navigation rejects admin destinations. The customer website has no admin dashboard link.
 
-The in-app workspace has back/refresh controls, sign-out, loading/error recovery and HTTPS navigation restrictions. Owner credentials are not injected or bundled. Returning to customer mode retains the signed-in owner session; use Sign out to end it. iOS photo/camera purpose descriptions are configured for vehicle image selection. The native WebView dependency requires an updated app build.
+The owner opens the separate protected Admin Panel at `/admin` on a phone or laptop, signing in with the authorized owner's ChatGPT account. Fleet, prices, locations, bookings, private documents, feedback and review moderation remain there. No second owner app or store listing is needed.
 
-Android and iOS bundle compilation and navigation-policy checks passed. No Android emulator, iOS simulator or attached device is available here. **On-device sign-in, sign-out, keyboard/back behavior and photo selection remain unverified.** Identity providers may restrict embedded sign-in; test the actual provider used by the owner before release. This implementation does not bypass those restrictions or replace them with an unverified native OAuth flow.
+The server authorizes every admin page, script, stylesheet and API request; hiding links alone is not security. Existing older APKs may retain an Owner tab, but server authorization still applies. Install 1.3.0 to remove it.
 
-The user intends to test both Android and iPhone. EAS preview/production profiles are in `mobile/eas.json`. A new signed build needs the user's Expo project/account and applicable Apple signing setup; store release additionally needs Apple Developer and Google Play Console accounts. No APK, IPA, TestFlight release or store submission is included in the source archive. Native app build reference: https://docs.expo.dev/build/setup/ . WebView integration reference: https://github.com/react-native-webview/react-native-webview/blob/master/docs/Guide.md .
+The site remains owner-private at the user's request. Native catalogue requests remain unavailable until the audience is deliberately changed or native authentication is provided. Customer Bookings uses the platform ChatGPT sign-in in an embedded browser; real-device authentication and upload behavior still require verification. No credentials are embedded.
+
+Android and iOS source exports validate compilation. Android test APKs use the existing EAS project and signing key. A signed iPhone installer/App Store submission needs Apple Developer enrollment and iOS signing, not yet available. Play Store release also needs the user's Google Play Console account. Store review, release artwork and production readiness checks remain pending.
 
 ## Other launch work still pending
 
@@ -88,5 +90,5 @@ Stock photos do not show GoRide-owned cars or imply manufacturer endorsement. Wh
 - Each booking can have a driving licence and optional **already masked** Aadhaar image. Consent and masked-image confirmation are required. The app does not perform masking, OCR or document verification. JPG/PNG/WebP up to 8 MB; not PDF/HEIC. The owner should review documents manually.
 - Identity bytes live under `private/` in R2. No public `/media/` URL can read that prefix. Customer document routes authorize booking ownership; admin document routes authorize the owner. Responses use no-store. Customer and owner can permanently delete individual images. Replacement removes previous image bytes. There is no automatic retention schedule or full customer-record deletion UI yet; agree retention before accepting real documents.
 - Feedback is owner-only. Reviews require a completed booking, customer permission and a rating from 1–5. They start pending; only approved reviews expose the chosen display name, rating, review and date. Do not approve reviews containing private customer details. No fabricated reviews are seeded.
-- Owner navigation adds **Bookings & customers** and **Reviews & feedback**. Mobile 1.2.0 adds **Bookings**, using the protected customer page in a WebView. The previously installed 1.1.0 APK needs replacement to show that tab. Existing Owner dashboard gains its new features when refreshed.
+- Owner navigation adds **Bookings & customers** and **Reviews & feedback**. Mobile 1.3.0 retains **Bookings** and removes the Owner tab. Use the separate Admin Panel for management. Older APKs need replacement to show the clean customer navigation.
 - Automated Worker tests cover cross-customer isolation, admin authorization, CSRF origin checks, invalid booking data, document consent, private storage routing/deletion, completed-ride review eligibility and moderation. Android/iOS bundle export validates compilation only. Embedded sign-in and document picker still need testing on the user's phones.

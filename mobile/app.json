@@ -2,19 +2,19 @@
   "expo": {
     "name": "GoRide",
     "slug": "goride",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "Choose vehicle photos to upload to your GoRide owner dashboard.",
-        "NSCameraUsageDescription": "Take a vehicle photo for your GoRide listing."
+        "NSPhotoLibraryUsageDescription": "Choose a driving licence or optional masked Aadhaar image for your GoRide rental request.",
+        "NSCameraUsageDescription": "Take a document photo for your GoRide rental request."
       }
     },
     "android": {
       "package": "com.gorideesteam.goride",
-      "versionCode": 2
+      "versionCode": 3
     },
     "splash": {
       "backgroundColor": "#191c1a"
