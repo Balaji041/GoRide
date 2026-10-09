@@ -15,6 +15,13 @@
       "when": 1791526102030,
       "tag": "0001_lovely_brood",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791540511589,
+      "tag": "0002_neat_molten_man",
+      "breakpoints": true
     }
   ]
 }

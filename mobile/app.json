@@ -1,1 +1,32 @@
-{"expo":{"name":"GoRide","slug":"goride","version":"1.0.0","orientation":"portrait","userInterfaceStyle":"light","ios":{"supportsTablet":true},"android":{},"splash":{"backgroundColor":"#191c1a"},"assetBundlePatterns":["**/*"]}}
+{
+  "expo": {
+    "name": "GoRide",
+    "slug": "goride",
+    "version": "1.2.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Choose vehicle photos to upload to your GoRide owner dashboard.",
+        "NSCameraUsageDescription": "Take a vehicle photo for your GoRide listing."
+      }
+    },
+    "android": {
+      "package": "com.gorideesteam.goride",
+      "versionCode": 2
+    },
+    "splash": {
+      "backgroundColor": "#191c1a"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "80c102e5-f9e8-4c2a-8ce4-8d90f4bfc2f0"
+      }
+    },
+    "owner": "goridees-team"
+  }
+}
