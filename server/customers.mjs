@@ -25,7 +25,7 @@ async function booking(id){const row=await db.prepare('SELECT * FROM bookings WH
 if(path==='/api/customer/session'&&method==='GET')return json({email,phone:identity.phone,verifiedPhone:identity.verifiedPhone,verifiedEmail:identity.verifiedEmail||false,preview:identity.preview});
 if((path==='/api/customer/bookings'||path==='/api/admin/bookings')&&method==='GET'){
 const rows=await (admin?db.prepare('SELECT * FROM bookings ORDER BY created_at DESC LIMIT 200'):db.prepare('SELECT * FROM bookings WHERE customer_id=? ORDER BY created_at DESC LIMIT 200').bind(customerId)).all();
-const bookings=await Promise.all(rows.results.map(async row=>{const docs=await db.prepare('SELECT id,kind,created_at FROM documents WHERE booking_id=?').bind(row.id).all();const {customer_id,...safe}=row;return {...safe,documents:docs.results};}));return json({bookings});}
+const bookings=await Promise.all(rows.results.map(async row=>{const docs=await db.prepare('SELECT id,kind,created_at FROM documents WHERE booking_id=?').bind(row.id).all();const cancellations=await db.prepare('SELECT id,reason,status,created_at,decision_at,decision_note FROM cancellation_requests WHERE booking_id=? ORDER BY created_at DESC,id DESC').bind(row.id).all();const {customer_id,...safe}=row;return {...safe,documents:docs.results,cancellations:cancellations.results};}));return json({bookings});}
 if(path==='/api/customer/bookings'&&method==='POST'){
 const input=await body(request);if(!UUID.test(input.id||''))throw new ApiError(400,'Refresh the form and try again.');
 const existing=await db.prepare('SELECT id FROM bookings WHERE id=? AND customer_id=?').bind(input.id,customerId).first();if(existing)return json(existing);
@@ -50,9 +50,46 @@ db.prepare("INSERT OR IGNORE INTO bookings (id,customer_id,email,name,age,phone,
 db.prepare('INSERT OR IGNORE INTO notifications (id,recipient,booking_id,message,created_at,channel,phone) SELECT ?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM bookings WHERE id=? AND customer_id=?)').bind(noticeId,'owner',input.id,message,now,ownerChannel,env.GORIDE_OWNER_ALERT_PHONE||'',input.id,customerId)]);
 if(!results[0].meta.changes){const saved=await db.prepare('SELECT id FROM bookings WHERE id=? AND customer_id=?').bind(input.id,customerId).first();if(saved)return json(saved);throw new ApiError(409,'This car is already booked for those dates. Choose another car or different dates.');}
 notify(noticeId);return json({id:input.id,status:'requested'},201);}
+const cancellationMatch=path.match(/^\/api\/customer\/bookings\/([a-f0-9-]+)\/cancellations$/);
+if(cancellationMatch&&method==='POST'){
+const row=await booking(cancellationMatch[1]),input=await body(request);
+if(!UUID.test(input.id||''))throw new ApiError(400,'Refresh the booking and try again.');
+const previous=await db.prepare('SELECT id,status FROM cancellation_requests WHERE id=? AND booking_id=? AND customer_id=?').bind(input.id,row.id,customerId).first();
+if(previous)return json({id:previous.id,status:previous.status,version:row.version});
+if(input.version!==row.version)throw new ApiError(409,'This booking changed. Refresh before requesting cancellation.');
+if(!['requested','confirmed'].includes(row.status))throw new ApiError(400,'This booking is closed. Contact GoRide for help.');
+const reason=text(input.reason,'Cancellation reason',1000),now=new Date().toISOString(),nextVersion=row.version+1,noticeId='cancellation-request:'+input.id;
+const ownerChannel=['sms','whatsapp'].includes(env.GORIDE_OWNER_ALERT_CHANNEL)?env.GORIDE_OWNER_ALERT_CHANNEL:'none';
+const results=await db.batch([
+db.prepare("INSERT OR IGNORE INTO cancellation_requests (id,booking_id,customer_id,reason,status,created_at) SELECT ?,?,?,?,'pending',? WHERE EXISTS (SELECT 1 FROM bookings WHERE id=? AND customer_id=? AND version=? AND status IN ('requested','confirmed')) AND NOT EXISTS (SELECT 1 FROM cancellation_requests WHERE booking_id=? AND status='pending')").bind(input.id,row.id,customerId,reason,now,row.id,customerId,row.version,row.id),
+db.prepare("UPDATE bookings SET version=version+1,updated_at=? WHERE id=? AND customer_id=? AND version=? AND status IN ('requested','confirmed') AND EXISTS (SELECT 1 FROM cancellation_requests WHERE id=? AND booking_id=bookings.id AND status='pending')").bind(now,row.id,customerId,row.version,input.id),
+db.prepare("INSERT OR IGNORE INTO notifications (id,recipient,booking_id,message,created_at,channel,phone) SELECT ?,'owner',?,?,?,?,? WHERE EXISTS (SELECT 1 FROM cancellation_requests c JOIN bookings b ON b.id=c.booking_id WHERE c.id=? AND c.booking_id=? AND b.customer_id=? AND b.version=?)").bind(noticeId,row.id,'Cancellation requested for GoRide booking '+row.id.slice(0,8)+'. Open Bookings & customers to approve or decline.',now,ownerChannel,env.GORIDE_OWNER_ALERT_PHONE||'',input.id,row.id,customerId,nextVersion)
+]);
+if(!results[0].meta.changes){const saved=await db.prepare('SELECT id,status FROM cancellation_requests WHERE id=? AND booking_id=? AND customer_id=?').bind(input.id,row.id,customerId).first();if(saved)return json({...saved,version:(await booking(row.id)).version});throw new ApiError(409,'There is already a pending cancellation, or this booking changed. Refresh to see its status.');}
+notify(noticeId);return json({id:input.id,status:'pending',version:nextVersion},201);
+}
+const cancellationDecisionMatch=path.match(/^\/api\/admin\/bookings\/([a-f0-9-]+)\/cancellations\/([a-f0-9-]+)$/);
+if(cancellationDecisionMatch&&method==='PUT'){
+const row=await booking(cancellationDecisionMatch[1]),input=await body(request);
+const cancellation=await db.prepare('SELECT * FROM cancellation_requests WHERE id=? AND booking_id=?').bind(cancellationDecisionMatch[2],row.id).first();if(!cancellation)throw new ApiError(404,'Cancellation request not found.');
+if(!['approved','declined'].includes(input.status))throw new ApiError(400,'Approve or decline the cancellation request.');
+if(cancellation.status!=='pending'){if(cancellation.status===input.status&&cancellation.decision_version===input.version+1)return json({saved:true,status:cancellation.status,version:row.version});throw new ApiError(409,'This cancellation request has already been decided. Refresh to see the result.');}
+if(input.version!==row.version)throw new ApiError(409,'This booking changed. Refresh before deciding.');
+if(!['requested','confirmed'].includes(row.status))throw new ApiError(409,'This booking is closed. Refresh before deciding.');
+const note=text(input.note,'Reply to customer',1000),now=new Date().toISOString(),nextVersion=row.version+1,noticeId='cancellation-decision:'+cancellation.id;
+const approved=input.status==='approved',status=approved?'cancelled':row.status;
+const results=await db.batch([
+db.prepare("UPDATE bookings SET status=?,decision_note=?,version=version+1,updated_at=? WHERE id=? AND version=? AND status IN ('requested','confirmed') AND EXISTS (SELECT 1 FROM cancellation_requests WHERE id=? AND booking_id=bookings.id AND status='pending')").bind(status,approved?note:row.decision_note,now,row.id,row.version,cancellation.id),
+db.prepare("UPDATE cancellation_requests SET status=?,decision_note=?,decision_at=?,decision_version=? WHERE id=? AND status='pending' AND EXISTS (SELECT 1 FROM bookings WHERE id=? AND version=? AND status=?)").bind(input.status,note,now,nextVersion,cancellation.id,row.id,nextVersion,status),
+db.prepare("INSERT OR IGNORE INTO notifications (id,recipient,booking_id,message,created_at,channel,phone) SELECT ?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM cancellation_requests WHERE id=? AND status=? AND decision_version=?)").bind(noticeId,row.customer_id,row.id,'Your cancellation request for GoRide booking '+row.id.slice(0,8)+' was '+input.status+'. '+(approved?'The booking is cancelled. ':'The booking remains '+(row.status==='confirmed'?'accepted':'requested')+'. ')+note+' Open My bookings for details. No refund is processed by this action.',now,row.notify_via,row.phone,cancellation.id,input.status,nextVersion)
+]);
+if(!results[0].meta.changes)throw new ApiError(409,'This cancellation or booking changed. Refresh before deciding.');
+notify(noticeId);return json({saved:true,status:input.status,bookingStatus:status,version:nextVersion});
+}
 const statusMatch=path.match(/^\/api\/admin\/bookings\/([a-f0-9-]+)$/);
 if(statusMatch&&method==='PUT'){
 const row=await booking(statusMatch[1]),input=await body(request);if(input.version!==row.version)throw new ApiError(409,'This booking changed. Refresh before deciding.');
+if(await db.prepare("SELECT id FROM cancellation_requests WHERE booking_id=? AND status='pending'").bind(row.id).first())throw new ApiError(409,'Resolve the pending cancellation request before changing this booking.');
 if(!transitions[row.status]?.includes(input.status))throw new ApiError(400,'This booking cannot move to that status.');
 const note=typeof input.note==='string'?input.note.trim():'';if(note.length>1000||['rejected','cancelled'].includes(input.status)&&!note)throw new ApiError(400,'Enter a reason (up to 1,000 characters).');
 let quoteDetails=row.quote_details;
@@ -64,7 +101,7 @@ const now=new Date().toISOString(),nextVersion=row.version+1,noticeId='decision:
 const action={confirmed:'accepted',rejected:'rejected',cancelled:'cancelled',completed:'completed'}[input.status];
 const message='GoRide booking '+row.id.slice(0,8)+' was '+action+'.'+(input.status==='confirmed'?' Agreed rental total: INR '+quote+'.':'')+(note?' '+note:'')+' Open My bookings for details.';
 const results=await db.batch([
-db.prepare("UPDATE bookings SET status=?,decision_note=?,quoted_total=?,quote_details=?,version=version+1,updated_at=? WHERE id=? AND version=? AND (?!='confirmed' OR NOT EXISTS (SELECT 1 FROM bookings b WHERE b.car_id=bookings.car_id AND b.id!=bookings.id AND b.status IN ('confirmed','completed') AND (b.start_date||'T'||COALESCE(b.pickup_time,'00:00'))<(bookings.end_date||'T'||COALESCE(bookings.return_time,'00:00')) AND (b.end_date||'T'||COALESCE(b.return_time,'00:00'))>(bookings.start_date||'T'||COALESCE(bookings.pickup_time,'00:00'))))").bind(input.status,note,quote,quoteDetails,now,row.id,row.version,input.status),
+db.prepare("UPDATE bookings SET status=?,decision_note=?,quoted_total=?,quote_details=?,version=version+1,updated_at=? WHERE id=? AND version=? AND NOT EXISTS (SELECT 1 FROM cancellation_requests c WHERE c.booking_id=bookings.id AND c.status='pending') AND (?!='confirmed' OR NOT EXISTS (SELECT 1 FROM bookings b WHERE b.car_id=bookings.car_id AND b.id!=bookings.id AND b.status IN ('confirmed','completed') AND (b.start_date||'T'||COALESCE(b.pickup_time,'00:00'))<(bookings.end_date||'T'||COALESCE(bookings.return_time,'00:00')) AND (b.end_date||'T'||COALESCE(b.return_time,'00:00'))>(bookings.start_date||'T'||COALESCE(bookings.pickup_time,'00:00'))))").bind(input.status,note,quote,quoteDetails,now,row.id,row.version,input.status),
 db.prepare('INSERT OR IGNORE INTO notifications (id,recipient,booking_id,message,created_at,channel,phone) SELECT ?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM bookings WHERE id=? AND version=? AND status=?)').bind(noticeId,row.customer_id,row.id,message,now,row.notify_via,row.phone,row.id,nextVersion,input.status)]);
 if(!results[0].meta.changes)throw new ApiError(409,'This car has an overlapping accepted booking, or this request changed. Refresh before deciding.');
 notify(noticeId);return json({saved:true,status:input.status,version:nextVersion});}
