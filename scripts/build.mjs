@@ -11,3 +11,5 @@ await mkdir('dist/server',{recursive:true});await writeFile('dist/server/assets.
 await writeFile('dist/server/customers.mjs',await readFile('server/customers.mjs','utf8'));
 
 await writeFile('dist/server/messaging.mjs',await readFile('server/messaging.mjs','utf8'));
+
+await writeFile('dist/server/customer-auth.mjs',await readFile('server/customer-auth.mjs','utf8'));

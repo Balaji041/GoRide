@@ -1,3 +1,4 @@
+import {customerIdentity} from './customer-auth.mjs';
 import {deliverNotification,internationalPhone,messagingReady} from './messaging.mjs';
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const transitions={requested:['confirmed','rejected','cancelled'],confirmed:['completed','cancelled'],completed:[],rejected:[],cancelled:[]};
@@ -8,10 +9,10 @@ if(!path.startsWith('/api/customer/')&&!path.startsWith('/api/admin/bookings')&&
 if(!env.DB)throw new ApiError(503,'Customer records are temporarily unavailable.');
 const db=env.DB;
 if(path==='/api/reviews'&&method==='GET'){const rows=await db.prepare("SELECT display_name AS name,rating,message,created_at AS createdAt FROM feedback WHERE kind='review' AND status='approved' ORDER BY created_at DESC LIMIT 50").all();return json({reviews:rows.results});}
-const admin=path.startsWith('/api/admin/');let customerId;
-if(admin)owner(request);else{customerId=request.headers.get('oai-authenticated-user-id');if(!customerId)throw new ApiError(401,'Sign in to manage your bookings and documents.');}
+const admin=path.startsWith('/api/admin/');let customerId,identity;
+if(admin)owner(request);else{identity=await customerIdentity(request,env);customerId=identity?.id;if(!customerId)throw new ApiError(401,'Sign in to manage your bookings and documents.');}
 if(!['GET','HEAD'].includes(method)){const origin=request.headers.get('origin');if((origin&&origin!==url.origin)||request.headers.get('sec-fetch-site')==='cross-site')throw new ApiError(403,'Please submit from GoRide.');}
-const email=request.headers.get('oai-authenticated-user-email')||'';
+const email=admin?request.headers.get('oai-authenticated-user-email')||'':identity.email;
 const recipient=admin?'owner':customerId;
 const notify=(id)=>{const work=deliverNotification(db,env,id).catch(()=>{});if(h.waitUntil)h.waitUntil(work);return work;};
 if((path==='/api/customer/notifications'||path==='/api/admin/notifications')&&method==='GET'){
@@ -21,7 +22,7 @@ if(noticeMatch&&method==='PUT'){let noticeId;try{noticeId=decodeURIComponent(not
 if(path==='/api/admin/notifications/retry'&&method==='POST'){const input=await body(request);const notice=await db.prepare('SELECT id,delivery_status FROM notifications WHERE id=?').bind(input.id||'').first();if(!notice)throw new ApiError(404,'Notification not found.');if(!['unconfigured','failed'].includes(notice.delivery_status))throw new ApiError(409,'This message cannot be safely retried. Check provider logs if its status is unknown.');await notify(notice.id);return json({saved:true});}
 
 async function booking(id){const row=await db.prepare('SELECT * FROM bookings WHERE id=?').bind(id).first();if(!row||!admin&&row.customer_id!==customerId)throw new ApiError(404,'Booking not found.');return row;}
-if(path==='/api/customer/session'&&method==='GET')return json({email});
+if(path==='/api/customer/session'&&method==='GET')return json({email,phone:identity.phone,verifiedPhone:identity.verifiedPhone,preview:identity.preview});
 if((path==='/api/customer/bookings'||path==='/api/admin/bookings')&&method==='GET'){
 const rows=await (admin?db.prepare('SELECT * FROM bookings ORDER BY created_at DESC LIMIT 200'):db.prepare('SELECT * FROM bookings WHERE customer_id=? ORDER BY created_at DESC LIMIT 200').bind(customerId)).all();
 const bookings=await Promise.all(rows.results.map(async row=>{const docs=await db.prepare('SELECT id,kind,created_at FROM documents WHERE booking_id=?').bind(row.id).all();const {customer_id,...safe}=row;return {...safe,documents:docs.results};}));return json({bookings});}
@@ -29,6 +30,7 @@ if(path==='/api/customer/bookings'&&method==='POST'){
 const input=await body(request);if(!UUID.test(input.id||''))throw new ApiError(400,'Refresh the form and try again.');
 const existing=await db.prepare('SELECT id FROM bookings WHERE id=? AND customer_id=?').bind(input.id,customerId).first();if(existing)return json(existing);
 const name=text(input.name,'Full name',100),phone=text(input.phone,'Phone number',20);if(!/^\+?[0-9 ()-]{10,20}$/.test(phone)||phone.replace(/\D/g,'').length<10)throw new ApiError(400,'Enter a valid phone number.');
+if(identity.verifiedPhone&&internationalPhone(phone)!==identity.phone)throw new ApiError(400,'Use your verified mobile number for this booking.');
 if(!Number.isInteger(input.age)||input.age<18||input.age>100)throw new ApiError(400,'Enter an age from 18 to 100.');if(input.consent!==true)throw new ApiError(400,'Please consent to using your details for this rental request.');
 const validDate=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&!Number.isNaN(Date.parse(value))&&new Date(value).toISOString().slice(0,10)===value;
 const today=new Date(Date.now()+330*60000).toISOString().slice(0,10);

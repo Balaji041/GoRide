@@ -111,3 +111,18 @@ Customer phone alerts are opt-in on the request form (none, SMS or WhatsApp), wi
 Delivery runs after the saved transaction. Missing configuration or provider failure never rolls back a booking. Submitted means the provider accepted the request, not delivered to the handset. No status callback is implemented. The owner can retry explicitly rejected/unconfigured messages. Unknown responses and interrupted sending states require checking provider logs; they are not automatically retried to avoid duplicate billable messages. Messaging has been tested with a fake provider only; no real message has been sent or delivery verified.
 
 Official references: https://www.twilio.com/docs/messaging/api/message-resource and https://www.twilio.com/docs/whatsapp/tutorial/send-whatsapp-notification-messages-templates .
+
+
+## Customer SMS login (1.4.0)
+
+`/login` provides Indian mobile-number sign-in using six-digit SMS codes via Twilio Verify. The provider creates and checks the code; no app-generated or test code is deployed. Enable with server-only TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_VERIFY_SERVICE_SID (a Verify Service configured for six-digit codes). No provider account is connected and no real OTP has been sent or verified yet. Provider configuration and real-phone QA remain required before declaring phone login operational.
+
+The Site's private dispatch-owned ChatGPT gate remains in place at the user's request. Phone login is an additional customer identity behind that gate during testing, not a bypass. Anonymous public browsing still requires an explicitly authorized audience change. Without Verify configuration, existing signed-in platform users can continue the clearly labelled private test flow. Once configured, customer APIs require verified phone sessions; admin APIs continue using the platform-authorized owner email only.
+
+Verified sessions last seven days. A 256-bit opaque token lives only in a Secure, HttpOnly, SameSite=Lax host cookie; D1 holds its SHA-256 hash. Logout revokes the token. Challenges expire after ten minutes, accept at most five code attempts, are consumed once, and bind the provider verification ID to the requested phone. Resends have a rolling sixty-second cooldown plus per-phone/per-IP limits. Authentication POSTs require same-origin requests. No OTP or provider secret is returned, stored in browser storage or logged.
+
+Each verified phone has a separate customer ID. Bookings must use that verified number. Phone identity never grants owner permissions. Existing private test bookings are not automatically linked by typed phone numbers, which were previously unverified. Expired challenges, auth-limit records and sessions are cleaned in bounded batches during authentication; an automatic account/session retention policy is not yet provided.
+
+Mobile 1.4.0 removes the old native shell signout shortcut; use Sign out inside My bookings to revoke the phone session. Replace older APKs before enabling phone login. Android and iPhone use the same protected customer pages. On a still-private Site, signing out of phone login does not necessarily end the separate platform session. Phone verification and document picker behavior require on-device testing.
+
+Official Verify API references: https://www.twilio.com/docs/verify/api/verification and https://www.twilio.com/docs/verify/api/verification-check .

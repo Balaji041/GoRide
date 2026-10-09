@@ -2,7 +2,7 @@
   "expo": {
     "name": "GoRide",
     "slug": "goride",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "ios": {
@@ -14,7 +14,7 @@
     },
     "android": {
       "package": "com.gorideesteam.goride",
-      "versionCode": 3
+      "versionCode": 4
     },
     "splash": {
       "backgroundColor": "#191c1a"
