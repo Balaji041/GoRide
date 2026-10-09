@@ -1,0 +1,13 @@
+const sections=[...document.querySelectorAll('.policy-section')];
+const expand=document.querySelector('#expand-policies');
+const printButton=document.querySelector('#print-policy');
+const updateExpand=()=>{expand.textContent=sections.every(section=>section.open)?'Collapse all':'Expand all';};
+expand.hidden=false;printButton.hidden=false;
+expand.addEventListener('click',()=>{const open=!sections.every(section=>section.open);sections.forEach(section=>{section.open=open;});updateExpand();});
+sections.forEach(section=>section.addEventListener('toggle',updateExpand));
+const openHash=()=>{const section=sections.find(item=>'#'+item.id===location.hash);if(section)section.open=true;};
+window.addEventListener('hashchange',openHash);openHash();
+let printState;
+window.addEventListener('beforeprint',()=>{printState=sections.map(section=>section.open);sections.forEach(section=>{section.open=true;});});
+window.addEventListener('afterprint',()=>{if(printState)sections.forEach((section,index)=>{section.open=printState[index];});updateExpand();});
+printButton.addEventListener('click',()=>window.print());
