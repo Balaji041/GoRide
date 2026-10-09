@@ -26,6 +26,15 @@ assert.equal((await call('/api/admin/cars/dzire','PUT',{...original,selfRate:99}
 r=await call('/api/admin/initialize','POST',{});assert.equal((await r.json()).cars.find(c=>c.id==='dzire').selfRate,2500);
 assert.equal((await call('/api/admin/cars','POST',{...original,selfRate:-1})).status,400);
 assert.equal((await call('/api/admin/cars','POST',{...original,image:'javascript:alert(1)'})).status,400);
+assert.equal((await call('/api/admin/cars','POST',{...original,gallery:[{url:'javascript:alert(1)'}]})).status,400);
+assert.equal((await call('/api/admin/cars','POST',{...original,gallery:Array(8).fill({url:'https://example.com/car.jpg'})})).status,400);
+const gallery=[{url:'https://example.com/car-rear.jpg',credit:'GoRide',source:'https://example.com/photos',license:'Owner supplied',licenseUrl:''}];
+const withGallery=await call('/api/admin/cars','POST',{...original,name:'Gallery test car',gallery});assert.equal(withGallery.status,201);const savedGallery=await withGallery.json();assert.deepEqual(savedGallery.gallery,gallery);
+const publicGallery=await (await call('/api/catalog','GET',undefined,{})).json();assert.deepEqual(publicGallery.cars.find(c=>c.id===savedGallery.id).gallery,gallery);
+// Legacy single-photo records gain default extra photos only while the original cover matches.
+const legacy={...original};delete legacy.gallery;await db.prepare('UPDATE cars SET data=? WHERE id=?').bind(JSON.stringify(legacy),'baleno').run();
+const legacyCatalog=await (await call('/api/catalog','GET',undefined,{})).json();assert.deepEqual(legacyCatalog.cars.find(c=>c.id==='baleno').gallery,[]);
+
 assert.equal((await call('/api/admin/cars','POST',{...original,locationIds:['unknown']})).status,400);
 r=await call('/api/admin/locations','POST',{name:'Hyderabad'});assert.equal(r.status,201);const location=await r.json();
 r=await call('/api/admin/cars','POST',{...original,name:'New car',locationIds:[location.id],selfRate:1800});assert.equal(r.status,201);const newCar=await r.json();

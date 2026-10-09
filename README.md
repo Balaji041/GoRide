@@ -138,3 +138,9 @@ When enabled, unverified platform preview identities cannot access customer acco
 ### GoRide visual refresh (mobile 1.5.0)
 
 Customer web and native screens share midnight navy (#101e33), cobalt blue (#2555e8), white and pale blue surfaces. The home page uses a compact two-line hero, a clear rental-mode selector, separate date fields, larger vehicle cards and a mobile-visible My bookings link. Login, account and review surfaces use the same palette. No booking permissions or data visibility changed. Verified responsive home layouts at 320px and 1440px and checked car-image loading/trip preview in the local browser. Android/iOS exports compile; actual-device QA and Apple signing are still pending. A new APK is required for the native Explore/Cities/Help design.
+
+### Car slideshows (mobile 1.6.0)
+
+The marketing banner rotates three representative car photos every six seconds; users can select a slide or pause it. Reduced-motion settings disable autoplay. Vehicle cards have swipeable, keyboard-accessible front/rear galleries. Owners can upload up to seven extra photos per listing through Edit car; each gallery photo is validated server-side and stored in the existing car JSON. Existing single-photo rows receive the verified default rear view only if their cover still matches the original launch photo; owner-supplied covers are preserved without assumed gallery images. An explicitly empty gallery suppresses defaults.
+
+The old footer and mobile Help credit lists were removed. Required Commons attribution remains on /image-information, linked by a discreet info button on credited photos. Own photos with no required attribution do not show the info button. Hero photos use the Unsplash License. Images are representative and do not establish actual fleet inventory.

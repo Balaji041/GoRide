@@ -11,7 +11,16 @@
     "photographer": "Biswarup Ganguly",
     "license": "CC BY 3.0",
     "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-    "changes": "Cropped to fit vehicle card"
+    "changes": "Cropped to fit vehicle card",
+    "gallery": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/9/9c/Maruti_Suzuki_Dzire_VXi_VVT_%28rear%29.JPG",
+        "source": "https://commons.wikimedia.org/wiki/File:Maruti_Suzuki_Dzire_VXi_VVT_(rear).JPG",
+        "credit": "Biswarup Ganguly",
+        "license": "CC BY 3.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
+      }
+    ]
   },
   "baleno": {
     "url": "https://upload.wikimedia.org/wikipedia/commons/d/d8/2022_Maruti_Suzuki_Baleno_Alpha_%28India%29_front_view_02.jpg",
@@ -19,7 +28,16 @@
     "photographer": "Kannada DriveSpark",
     "license": "CC BY 3.0",
     "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-    "changes": "Cropped to fit vehicle card"
+    "changes": "Cropped to fit vehicle card",
+    "gallery": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/d/d4/2022_Maruti_Suzuki_Baleno_Alpha_%28India%29_rear_view.jpg",
+        "source": "https://commons.wikimedia.org/wiki/File:2022_Maruti_Suzuki_Baleno_Alpha_(India)_rear_view.jpg",
+        "credit": "Kannada DriveSpark",
+        "license": "CC BY 3.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
+      }
+    ]
   },
   "i20": {
     "url": "https://upload.wikimedia.org/wikipedia/commons/f/fe/2020_Hyundai_i20_1.5_Asta_%28O%29_Diesel_%28India%29_front_view.png",
@@ -27,6 +45,29 @@
     "photographer": "The Drivers Hub",
     "license": "CC BY 3.0",
     "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
-    "changes": "Cropped to fit vehicle card"
-  }
+    "changes": "Cropped to fit vehicle card",
+    "gallery": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/9/95/2020_Hyundai_i20_1.5_Asta_%28O%29_Diesel_%28India%29_rear_view.png",
+        "source": "https://commons.wikimedia.org/wiki/File:2020_Hyundai_i20_1.5_Asta_(O)_Diesel_(India)_rear_view.png",
+        "credit": "The Drivers Hub",
+        "license": "CC BY 3.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/3.0/"
+      }
+    ]
+  },
+  "heroGallery": [
+    {
+      "url": "https://images.unsplash.com/photo-1765171103239-b4ce1f941910?auto=format&fit=crop&fm=jpg&q=85&w=2400&h=1200",
+      "source": "https://unsplash.com/photos/black-luxury-car-parked-at-night-VGDCLjGCP18",
+      "photographer": "Rana Singh",
+      "license": "Unsplash License"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1764605206511-7a649d9df63b?auto=format&fit=crop&fm=jpg&q=85&w=2400&h=1200",
+      "source": "https://unsplash.com/photos/black-luxury-sedan-parked-on-a-wet-street-at-night-9xhwtVIM0dE",
+      "photographer": "Ilya Godze",
+      "license": "Unsplash License"
+    }
+  ]
 }
