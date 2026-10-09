@@ -14,3 +14,5 @@ export const customers=sqliteTable('customers',{id:text('id').primaryKey(),phone
 export const customerSessions=sqliteTable('customer_sessions',{tokenHash:text('token_hash').primaryKey(),customerId:text('customer_id').notNull(),expiresAt:integer('expires_at').notNull()},t=>[index('idx_customer_sessions_expiry').on(t.expiresAt)]);
 export const loginChallenges=sqliteTable('login_challenges',{id:text('id').primaryKey(),phone:text('phone').notNull(),providerId:text('provider_id').notNull(),attempts:integer('attempts').notNull().default(0),consumed:integer('consumed').notNull().default(0),expiresAt:integer('expires_at').notNull()},t=>[index('idx_login_challenges_expiry').on(t.expiresAt)]);
 export const authLimits=sqliteTable('auth_limits',{key:text('key').primaryKey(),count:integer('count').notNull(),expiresAt:integer('expires_at').notNull()});
+
+export const emailAccounts=sqliteTable('email_accounts',{id:text('id').primaryKey(),email:text('email').notNull(),passwordHash:text('password_hash').notNull(),recoveryHash:text('recovery_hash').notNull(),createdAt:integer('created_at').notNull()},t=>[uniqueIndex('idx_email_accounts_email').on(t.email)]);

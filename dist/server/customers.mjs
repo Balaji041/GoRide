@@ -22,7 +22,7 @@ if(noticeMatch&&method==='PUT'){let noticeId;try{noticeId=decodeURIComponent(not
 if(path==='/api/admin/notifications/retry'&&method==='POST'){const input=await body(request);const notice=await db.prepare('SELECT id,delivery_status FROM notifications WHERE id=?').bind(input.id||'').first();if(!notice)throw new ApiError(404,'Notification not found.');if(!['unconfigured','failed'].includes(notice.delivery_status))throw new ApiError(409,'This message cannot be safely retried. Check provider logs if its status is unknown.');await notify(notice.id);return json({saved:true});}
 
 async function booking(id){const row=await db.prepare('SELECT * FROM bookings WHERE id=?').bind(id).first();if(!row||!admin&&row.customer_id!==customerId)throw new ApiError(404,'Booking not found.');return row;}
-if(path==='/api/customer/session'&&method==='GET')return json({email,phone:identity.phone,verifiedPhone:identity.verifiedPhone,preview:identity.preview});
+if(path==='/api/customer/session'&&method==='GET')return json({email,phone:identity.phone,verifiedPhone:identity.verifiedPhone,verifiedEmail:identity.verifiedEmail||false,preview:identity.preview});
 if((path==='/api/customer/bookings'||path==='/api/admin/bookings')&&method==='GET'){
 const rows=await (admin?db.prepare('SELECT * FROM bookings ORDER BY created_at DESC LIMIT 200'):db.prepare('SELECT * FROM bookings WHERE customer_id=? ORDER BY created_at DESC LIMIT 200').bind(customerId)).all();
 const bookings=await Promise.all(rows.results.map(async row=>{const docs=await db.prepare('SELECT id,kind,created_at FROM documents WHERE booking_id=?').bind(row.id).all();const {customer_id,...safe}=row;return {...safe,documents:docs.results};}));return json({bookings});}

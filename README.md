@@ -67,7 +67,7 @@ Android and iOS source exports validate compilation. Android test APKs use the e
 
 ## Other launch work still pending
 
-App-owned phone/email sign-in, online payment verification, native push and live WhatsApp/SMS delivery are not enabled. Accepted bookings now enforce date availability per car listing. Booking requests and customer records use the platform ChatGPT identity; they are not a reservation or payment system. Hiding a listing is not a booking calendar. Quote requests open WhatsApp for the customer to review/send; they do not create reservations. Confirm actual cars, rates, rental terms, business details and policies before launch.
+Email/password customer sign-in is implemented; enable it with GORIDE_EMAIL_LOGIN=enabled. SMS sign-in, online payments, native push and live WhatsApp/SMS delivery are not enabled. Accepted bookings enforce date availability per car listing. Customer records use their authenticated customer account; legacy private-preview records remain separate. Hiding a listing is not a booking calendar. Quote requests open WhatsApp for the customer to review/send; they do not create reservations. Confirm actual cars, rates, rental terms, business details and policies before launch.
 
 WhatsApp: +91 9100852287. Calls: +91 8610235694.
 
@@ -113,11 +113,11 @@ Delivery runs after the saved transaction. Missing configuration or provider fai
 Official references: https://www.twilio.com/docs/messaging/api/message-resource and https://www.twilio.com/docs/whatsapp/tutorial/send-whatsapp-notification-messages-templates .
 
 
-## Customer SMS login (1.4.0)
+## Optional customer SMS backend (1.4.0)
 
-`/login` provides Indian mobile-number sign-in using six-digit SMS codes via Twilio Verify. The provider creates and checks the code; no app-generated or test code is deployed. Enable with server-only TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_VERIFY_SERVICE_SID (a Verify Service configured for six-digit codes). No provider account is connected and no real OTP has been sent or verified yet. Provider configuration and real-phone QA remain required before declaring phone login operational.
+The retained optional SMS API supports Indian mobile-number sign-in using six-digit SMS codes via Twilio Verify. The current /login UI uses email and password instead. The provider creates and checks the code; no app-generated or test code is deployed. Enable with server-only TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_VERIFY_SERVICE_SID (a Verify Service configured for six-digit codes). No provider account is connected and no real OTP has been sent or verified yet. Provider configuration and real-phone QA remain required before declaring phone login operational.
 
-The Site's private dispatch-owned ChatGPT gate remains in place at the user's request. Phone login is an additional customer identity behind that gate during testing, not a bypass. Anonymous public browsing still requires an explicitly authorized audience change. Without Verify configuration, existing signed-in platform users can continue the clearly labelled private test flow. Once configured, customer APIs require verified phone sessions; admin APIs continue using the platform-authorized owner email only.
+The Site's private dispatch-owned ChatGPT gate remains in place at the user's request. Phone login is an additional customer identity behind that gate during testing, not a bypass. Anonymous public browsing still requires an explicitly authorized audience change. Only when both email login and Verify are disabled can existing signed-in platform users continue the private test flow. Once configured, customer APIs require verified phone sessions; admin APIs continue using the platform-authorized owner email only.
 
 Verified sessions last seven days. A 256-bit opaque token lives only in a Secure, HttpOnly, SameSite=Lax host cookie; D1 holds its SHA-256 hash. Logout revokes the token. Challenges expire after ten minutes, accept at most five code attempts, are consumed once, and bind the provider verification ID to the requested phone. Resends have a rolling sixty-second cooldown plus per-phone/per-IP limits. Authentication POSTs require same-origin requests. No OTP or provider secret is returned, stored in browser storage or logged.
 
@@ -126,3 +126,11 @@ Each verified phone has a separate customer ID. Bookings must use that verified 
 Mobile 1.4.0 removes the old native shell signout shortcut; use Sign out inside My bookings to revoke the phone session. Replace older APKs before enabling phone login. Android and iPhone use the same protected customer pages. On a still-private Site, signing out of phone login does not necessarily end the separate platform session. Phone verification and document picker behavior require on-device testing.
 
 Official Verify API references: https://www.twilio.com/docs/verify/api/verification and https://www.twilio.com/docs/verify/api/verification-check .
+
+### Email and password customer login
+
+Set the server runtime variable `GORIDE_EMAIL_LOGIN=enabled` to use the first-party customer login without an SMS or email delivery provider. Registration, password login and recovery share `/login`, including the customer app's My bookings view. Passwords require 15–128 characters and are independently salted PBKDF2-SHA256 hashes (100,000 iterations, Workers WebCrypto limit). Authentication attempts have per-IP and per-email server limits. Session tokens use the existing hashed, seven-day HttpOnly secure cookies. Owner privileges still require the separately authorized platform owner identity.
+
+Customers receive a random 256-bit recovery code at registration and must save it privately. The server stores only its SHA-256 hash. Recovery rotates the password and recovery code and revokes every old session. There is no email delivery, email verification, phone verification or email-based password reset. The login does not establish ownership of a typed email address. Existing preview/phone bookings are never linked automatically by a matching email or phone. A customer who loses both password and recovery code cannot recover through this flow; manual identity review would be needed. Runtime hosting/storage usage can still incur platform charges; this removes messaging-provider charges, not all operating costs.
+
+When enabled, unverified platform preview identities cannot access customer account APIs without a customer session. The site's private audience gate remains in place. Native version 1.4's My bookings WebView loads this web login; older shells should update to version 1.4 for correct customer-session sign-out. Actual Android/iOS device sign-in, recovery and upload QA remain required before release.

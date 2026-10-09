@@ -13,3 +13,5 @@ await writeFile('dist/server/customers.mjs',await readFile('server/customers.mjs
 await writeFile('dist/server/messaging.mjs',await readFile('server/messaging.mjs','utf8'));
 
 await writeFile('dist/server/customer-auth.mjs',await readFile('server/customer-auth.mjs','utf8'));
+
+await writeFile('dist/server/email-auth.mjs',await readFile('server/email-auth.mjs','utf8'));

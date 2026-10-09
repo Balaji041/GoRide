@@ -1,17 +1,18 @@
+import {emailAuthRoute} from './email-auth.mjs';
 import {internationalPhone} from './messaging.mjs';
 export const SESSION_COOKIE='__Host-goride_customer';
 const SESSION_SECONDS=7*24*60*60;
 const now=()=>Math.floor(Date.now()/1000);
 export async function digest(value){const data=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));return [...new Uint8Array(data)].map(n=>n.toString(16).padStart(2,'0')).join('');}
-function randomToken(){const bytes=crypto.getRandomValues(new Uint8Array(32));return [...bytes].map(n=>n.toString(16).padStart(2,'0')).join('');}
+export function randomToken(){const bytes=crypto.getRandomValues(new Uint8Array(32));return [...bytes].map(n=>n.toString(16).padStart(2,'0')).join('');}
 export function otpReady(env){return !!(env.TWILIO_ACCOUNT_SID&&env.TWILIO_AUTH_TOKEN&&env.TWILIO_VERIFY_SERVICE_SID);}
-function sessionToken(request){const value=(request.headers.get('cookie')||'').split(';').map(s=>s.trim()).find(s=>s.startsWith(SESSION_COOKIE+'='))?.slice(SESSION_COOKIE.length+1);return /^[a-f0-9]{64}$/.test(value||'')?value:null;}
-function sessionCookie(token,seconds=SESSION_SECONDS){return `${SESSION_COOKIE}=${token}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${seconds}`;}
+export function sessionToken(request){const value=(request.headers.get('cookie')||'').split(';').map(s=>s.trim()).find(s=>s.startsWith(SESSION_COOKIE+'='))?.slice(SESSION_COOKIE.length+1);return /^[a-f0-9]{64}$/.test(value||'')?value:null;}
+export function sessionCookie(token,seconds=SESSION_SECONDS){return `${SESSION_COOKIE}=${token}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${seconds}`;}
 export async function customerIdentity(request,env){
 const token=sessionToken(request);
-if(token&&env.DB){const row=await env.DB.prepare('SELECT c.id,c.phone FROM customer_sessions s JOIN customers c ON c.id=s.customer_id WHERE s.token_hash=? AND s.expires_at>?').bind(await digest(token),now()).first();if(row)return {id:row.id,phone:row.phone,email:'',verifiedPhone:true,preview:false};}
+if(token&&env.DB){const row=await env.DB.prepare('SELECT s.customer_id AS id,c.phone,e.email FROM customer_sessions s LEFT JOIN customers c ON c.id=s.customer_id LEFT JOIN email_accounts e ON e.id=s.customer_id WHERE s.token_hash=? AND s.expires_at>? AND (c.id IS NOT NULL OR e.id IS NOT NULL)').bind(await digest(token),now()).first();if(row)return {id:row.id,phone:row.phone||null,email:row.email||'',verifiedPhone:!!row.phone,verifiedEmail:false,preview:false};}
 // Preserve existing authenticated private test accounts until SMS Verify is configured.
-if(!otpReady(env)){const id=request.headers.get('oai-authenticated-user-id');if(id)return {id,email:request.headers.get('oai-authenticated-user-email')||'',phone:null,verifiedPhone:false,preview:true};}
+if(env.GORIDE_EMAIL_LOGIN!=='enabled'&&!otpReady(env)){const id=request.headers.get('oai-authenticated-user-id');if(id)return {id,email:request.headers.get('oai-authenticated-user-email')||'',phone:null,verifiedPhone:false,preview:true};}
 return null;
 }
 export async function verifyProvider(env,operation,phoneOrSid,code,fetcher=fetch){
@@ -25,11 +26,12 @@ return {status:'invalid'};
 export async function customerAuthRoute(request,env,h){
 const path=new URL(request.url).pathname;if(!path.startsWith('/api/customer-auth/'))return null;
 const {json,body,ApiError}=h;
-if(path==='/api/customer-auth/config'&&request.method==='GET')return json({smsEnabled:otpReady(env),privatePreview:!!request.headers.get('oai-authenticated-user-id')&&!otpReady(env)});
+if(path==='/api/customer-auth/config'&&request.method==='GET')return json({emailEnabled:env.GORIDE_EMAIL_LOGIN==='enabled',smsEnabled:otpReady(env),privatePreview:!!request.headers.get('oai-authenticated-user-id')&&!otpReady(env)&&env.GORIDE_EMAIL_LOGIN!=='enabled'});
 if(request.method!=='POST')throw new ApiError(404,'This action is not available.');
 if(request.headers.get('origin')!==new URL(request.url).origin||request.headers.get('sec-fetch-site')==='cross-site')throw new ApiError(403,'Please sign in from GoRide.');
 if(!env.DB)throw new ApiError(503,'Customer sign-in is temporarily unavailable.');const db=env.DB;
 if(path==='/api/customer-auth/logout'){const token=sessionToken(request);if(token)await db.prepare('DELETE FROM customer_sessions WHERE token_hash=?').bind(await digest(token)).run();return json({signedOut:true},200,{'Set-Cookie':sessionCookie('',0)});}
+const emailResponse=await emailAuthRoute(request,env,h);if(emailResponse)return emailResponse;
 if(!otpReady(env))throw new ApiError(503,'SMS sign-in is not active yet. GoRide must connect its OTP service before codes can be sent.');
 const input=await body(request),currentTime=now();
 async function limit(key,windowSeconds,max){const bucket=Math.floor(currentTime/windowSeconds),hash=await digest(key+':'+bucket);const result=await db.prepare('INSERT INTO auth_limits (key,count,expires_at) VALUES (?,1,?) ON CONFLICT(key) DO UPDATE SET count=count+1 WHERE count<? RETURNING count').bind(hash,(bucket+1)*windowSeconds,max).first();if(!result)throw new ApiError(429,'Too many attempts. Wait a few minutes before trying again.');}
