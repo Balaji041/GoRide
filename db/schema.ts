@@ -20,3 +20,5 @@ export const emailAccounts=sqliteTable('email_accounts',{id:text('id').primaryKe
 export const cancellationRequests=sqliteTable('cancellation_requests',{
 id:text('id').primaryKey(),bookingId:text('booking_id').notNull(),customerId:text('customer_id').notNull(),reason:text('reason').notNull(),status:text('status').notNull().default('pending'),createdAt:text('created_at').notNull(),decisionAt:text('decision_at'),decisionNote:text('decision_note').notNull().default(''),decisionVersion:integer('decision_version')
 },t=>[index('idx_cancellation_booking_created').on(t.bookingId,t.createdAt),uniqueIndex('idx_cancellation_one_pending').on(t.bookingId).where(sql`${t.status} = 'pending'`)]);
+
+export const paymentRecords=sqliteTable('payment_records',{id:text('id').primaryKey(),bookingId:text('booking_id').notNull(),kind:text('kind').notNull(),amount:integer('amount').notNull(),method:text('method').notNull(),reference:text('reference').notNull().default(''),note:text('note').notNull(),createdAt:text('created_at').notNull()},t=>[index('idx_payment_booking_created').on(t.bookingId,t.createdAt)]);

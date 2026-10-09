@@ -29,7 +29,7 @@ return json({email,displayName,phone:identity.phone,verifiedPhone:identity.verif
 
 if((path==='/api/customer/bookings'||path==='/api/admin/bookings')&&method==='GET'){
 const rows=await (admin?db.prepare('SELECT * FROM bookings ORDER BY created_at DESC LIMIT 200'):db.prepare('SELECT * FROM bookings WHERE customer_id=? ORDER BY created_at DESC LIMIT 200').bind(customerId)).all();
-const bookings=await Promise.all(rows.results.map(async row=>{const docs=await db.prepare('SELECT id,kind,created_at FROM documents WHERE booking_id=?').bind(row.id).all();const cancellations=await db.prepare('SELECT id,reason,status,created_at,decision_at,decision_note FROM cancellation_requests WHERE booking_id=? ORDER BY created_at DESC,id DESC').bind(row.id).all();const {customer_id,...safe}=row;return {...safe,documents:docs.results,cancellations:cancellations.results};}));return json({bookings});}
+const bookings=await Promise.all(rows.results.map(async row=>{const docs=await db.prepare('SELECT id,kind,created_at FROM documents WHERE booking_id=?').bind(row.id).all();const cancellations=await db.prepare('SELECT id,reason,status,created_at,decision_at,decision_note FROM cancellation_requests WHERE booking_id=? ORDER BY created_at DESC,id DESC').bind(row.id).all();const payments=await db.prepare("SELECT id,kind,amount,method,reference,note,created_at FROM payment_records WHERE booking_id=? ORDER BY created_at,id").bind(row.id).all();const {customer_id,...safe}=row;return {...safe,documents:docs.results,cancellations:cancellations.results,payments:payments.results};}));return json({bookings});}
 if(path==='/api/customer/bookings'&&method==='POST'){
 const input=await body(request);if(!UUID.test(input.id||''))throw new ApiError(400,'Refresh the form and try again.');
 const existing=await db.prepare('SELECT id FROM bookings WHERE id=? AND customer_id=?').bind(input.id,customerId).first();if(existing)return json(existing);
@@ -89,6 +89,36 @@ db.prepare("INSERT OR IGNORE INTO notifications (id,recipient,booking_id,message
 ]);
 if(!results[0].meta.changes)throw new ApiError(409,'This cancellation or booking changed. Refresh before deciding.');
 notify(noticeId);return json({saved:true,status:input.status,bookingStatus:status,version:nextVersion});
+}
+// Append-only owner-entered records. No payment provider is called here.
+const paymentMatch=path.match(/^\/api\/admin\/bookings\/([a-f0-9-]+)\/payments$/);
+if(paymentMatch&&method==='POST'){
+const row=await booking(paymentMatch[1]),input=await body(request);
+if(!UUID.test(input.id||''))throw new ApiError(400,'Refresh the payment form and retry.');
+const kinds=['rental_received','rental_refunded','deposit_received','deposit_refunded'];
+if(!kinds.includes(input.kind)||!Number.isSafeInteger(input.amount)||input.amount<1||input.amount>10000000)throw new ApiError(400,'Choose a valid payment type and a positive whole-rupee amount.');
+if(!['cash','upi','bank','card','other'].includes(input.method))throw new ApiError(400,'Choose the payment method used.');
+const reference=input.reference==null||input.reference===''?'':text(input.reference,'Payment reference',100),note=text(input.note,'Record note',500);
+if(!note)throw new ApiError(400,'Add a note explaining this record.');
+const existing=await db.prepare('SELECT * FROM payment_records WHERE id=?').bind(input.id).first();
+if(existing){if(existing.booking_id!==row.id||existing.kind!==input.kind||existing.amount!==input.amount||existing.method!==input.method||existing.reference!==reference||existing.note!==note)throw new ApiError(409,'This record reference has already been used.');return json({saved:true});}
+if(input.version!==row.version)throw new ApiError(409,'This booking changed. Refresh before recording money.');
+if(row.quoted_total==null)throw new ApiError(400,'Accept the booking with an agreed quote before recording payments.');
+const refund=input.kind.endsWith('_refunded'),category=input.kind.startsWith('deposit')?'deposit':'rental';
+if(!refund&&!['confirmed','completed'].includes(row.status))throw new ApiError(400,'Received money can only be recorded for accepted or completed bookings.');
+let quote;try{quote=JSON.parse(row.quote_details||'{}');}catch{quote={};}
+const cap=category==='deposit'?quote.deposit:row.quoted_total;
+if(!Number.isSafeInteger(cap)||cap<0)throw new ApiError(400,'This booking has no agreed deposit amount.');
+const now=new Date().toISOString(),delta=refund?-input.amount:input.amount,nextVersion=row.version+1,noticeId='payment:'+input.id;
+const netSql="COALESCE((SELECT SUM(CASE WHEN kind=? THEN amount WHEN kind=? THEN -amount ELSE 0 END) FROM payment_records WHERE booking_id=?),0)";
+const balance=netSql+'+?';
+const results=await db.batch([
+db.prepare("INSERT OR IGNORE INTO payment_records (id,booking_id,kind,amount,method,reference,note,created_at) SELECT ?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM bookings WHERE id=? AND version=? AND quoted_total IS NOT NULL) AND "+balance+" BETWEEN 0 AND ?").bind(input.id,row.id,input.kind,input.amount,input.method,reference,note,now,row.id,row.version,category+'_received',category+'_refunded',row.id,delta,cap),
+db.prepare('UPDATE bookings SET version=version+1,updated_at=? WHERE id=? AND version=? AND EXISTS (SELECT 1 FROM payment_records WHERE id=? AND booking_id=bookings.id)').bind(now,row.id,row.version,input.id),
+db.prepare('INSERT OR IGNORE INTO notifications (id,recipient,booking_id,message,created_at,channel,phone) SELECT ?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM payment_records p JOIN bookings b ON b.id=p.booking_id WHERE p.id=? AND p.booking_id=? AND b.version=?)').bind(noticeId,row.customer_id,row.id,'GoRide recorded '+category+' '+(refund?'refund':'payment')+' of INR '+input.amount+' for booking '+row.id.slice(0,8)+'. Open My bookings to review the record. Contact GoRide if it does not match your payment.',now,'none',row.phone,input.id,row.id,nextVersion)
+]);
+if(!results[0].meta.changes){const retry=await db.prepare('SELECT * FROM payment_records WHERE id=? AND booking_id=?').bind(input.id,row.id).first();if(retry&&retry.kind===input.kind&&retry.amount===input.amount&&retry.method===input.method&&retry.reference===reference&&retry.note===note)return json({saved:true});throw new ApiError(409,'Booking changed or amount exceeds the agreed balance. Refunds cannot exceed money held. Refresh and check the record.');}
+return json({saved:true},201);
 }
 const statusMatch=path.match(/^\/api\/admin\/bookings\/([a-f0-9-]+)$/);
 if(statusMatch&&method==='PUT'){

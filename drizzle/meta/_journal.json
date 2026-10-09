@@ -57,6 +57,13 @@
       "when": 1791567208050,
       "tag": "0007_talented_annihilus",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1791568488515,
+      "tag": "0008_lethal_brother_voodoo",
+      "breakpoints": true
     }
   ]
 }
