@@ -37,7 +37,8 @@ assert.equal((await call('/api/admin/documents/'+document.id,'GET',undefined,own
 const record=await db.prepare('SELECT storage_key FROM documents WHERE id=?').bind(document.id).first();assert.match(record.storage_key,/^private\//);assert.equal((await call('/media/'+record.storage_key,'GET',undefined,{})).status,404);
 const review={id:crypto.randomUUID(),kind:'review',bookingId:input.id,displayName:'Test first name',rating:5,message:'A smooth journey.',publishConsent:true};
 assert.equal((await call('/api/customer/feedback','POST',review)).status,400);
-assert.equal((await call('/api/admin/bookings/'+input.id,'PUT',{status:'completed'},owner)).status,200);
+assert.equal((await call('/api/admin/bookings/'+input.id,'PUT',{status:'confirmed',version:1,quotedTotal:3000},owner)).status,200);
+assert.equal((await call('/api/admin/bookings/'+input.id,'PUT',{status:'completed',version:2},owner)).status,200);
 assert.equal((await call('/api/customer/feedback','POST',review,other)).status,404);
 assert.equal((await call('/api/customer/feedback','POST',review)).status,201);
 assert.equal((await call('/api/customer/feedback','POST',{...review,id:crypto.randomUUID()})).status,409);

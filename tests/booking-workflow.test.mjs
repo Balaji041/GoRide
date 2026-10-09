@@ -1,0 +1,48 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile,readdir} from 'node:fs/promises';
+import {Miniflare} from 'miniflare';
+import {sendMessage,internationalPhone} from '../server/messaging.mjs';
+test('Booking decisions prevent overlapping acceptance, release cancellations and isolate alerts',async()=>{
+const mf=new Miniflare({modules:true,scriptPath:'dist/server/index.js',compatibilityDate:'2026-01-01',d1Databases:['DB'],r2Buckets:['BUCKET']});
+try{const db=await mf.getD1Database('DB');for(const name of (await readdir('drizzle')).filter(n=>n.endsWith('.sql')).sort())for(const sql of (await readFile('drizzle/'+name,'utf8')).split('--> statement-breakpoint'))if(sql.trim())await db.prepare(sql.trim()).run();
+const a={'oai-authenticated-user-id':'customer-a','oai-authenticated-user-email':'a@example.test','Content-Type':'application/json','Origin':'http://goride.test'},b={...a,'oai-authenticated-user-id':'customer-b'},owner={...a,'oai-authenticated-user-email':'nagendra@headrun.com'};
+const call=(path,method='GET',data,h=a)=>mf.dispatchFetch('http://goride.test'+path,{method,headers:h,body:data===undefined?undefined:JSON.stringify(data)});
+const date=d=>new Date(Date.now()+d*86400000).toISOString().slice(0,10);
+const input={id:crypto.randomUUID(),name:'Customer A',age:25,phone:'9100852287',carId:'dzire',locationId:'bangalore',mode:'self',startDate:date(5),endDate:date(8),consent:true,notifyVia:'sms',alertConsent:true};
+assert.equal((await call('/api/customer/bookings','POST',{...input,alertConsent:false})).status,400);
+assert.equal((await call('/api/customer/bookings','POST',input)).status,201);
+assert.equal((await call('/api/customer/bookings','POST',input)).status,200);
+const second={...input,id:crypto.randomUUID(),name:'Customer B'};assert.equal((await call('/api/customer/bookings','POST',second,b)).status,201);
+let notices=(await (await call('/api/admin/notifications','GET',undefined,owner)).json()).notifications;assert.equal(notices.length,2);assert.equal((await call('/api/admin/notifications')).status,403);
+assert.equal((await call('/api/admin/bookings/'+input.id,'PUT',{status:'confirmed',version:1},owner)).status,400);
+const decide=(id,status='confirmed',version=1,note='')=>call('/api/admin/bookings/'+id,'PUT',{status,version,note,quotedTotal:4000},owner);
+const race=await Promise.all([decide(input.id),decide(second.id)]);assert.deepEqual(race.map(r=>r.status).sort(),[200,409]);
+const win=race[0].status===200?input:second,lose=win===input?second:input,winnerHeaders=win===input?a:b,loserHeaders=win===input?b:a;
+assert.equal((await call('/api/customer/bookings','POST',{...input,id:crypto.randomUUID()})).status,409);
+assert.equal((await decide(win.id,'cancelled',2)).status,400);
+assert.equal((await decide(win.id,'cancelled',1,'Changed plans')).status,409);
+assert.equal((await decide(win.id,'cancelled',2,'Vehicle needs servicing')).status,200);
+assert.equal((await decide(lose.id)).status,200);
+assert.equal((await decide(win.id,'confirmed',3)).status,400);
+const adjacent={...input,id:crypto.randomUUID(),startDate:date(8),endDate:date(10)};assert.equal((await call('/api/customer/bookings','POST',adjacent)).status,201);assert.equal((await decide(adjacent.id)).status,200);
+const rejected={...input,id:crypto.randomUUID(),carId:'baleno'};assert.equal((await call('/api/customer/bookings','POST',rejected)).status,201);
+assert.equal((await decide(rejected.id,'rejected',1)).status,400);assert.equal((await decide(rejected.id,'rejected',1,'Pickup is unavailable at that time.')).status,200);
+const rows=(await (await call('/api/customer/bookings')).json()).bookings;assert.equal(rows.find(r=>r.id===rejected.id).decision_note,'Pickup is unavailable at that time.');
+let mine=(await (await call('/api/customer/notifications','GET',undefined,winnerHeaders)).json()).notifications;assert.equal(mine.filter(n=>n.booking_id===win.id).length,2);
+const other=(await (await call('/api/customer/notifications','GET',undefined,loserHeaders)).json()).notifications;assert.equal(other.filter(n=>n.booking_id===win.id).length,0);
+assert.equal((await call('/api/customer/notifications/'+encodeURIComponent(mine[0].id),'PUT',{},loserHeaders)).status,404);
+assert.equal((await call('/api/customer/notifications/'+encodeURIComponent(mine[0].id),'PUT',{},winnerHeaders)).status,200);
+const row=await db.prepare('SELECT COUNT(*) AS count FROM bookings WHERE car_id=? AND status=?').bind('dzire','confirmed').first();assert.equal(row.count,2);
+}finally{await mf.dispose();}
+});
+test('Phone messaging uses templates, never claims delivery, and handles provider uncertainty',async()=>{
+const env={TWILIO_ACCOUNT_SID:'ACtest',TWILIO_AUTH_TOKEN:'test-token',TWILIO_SMS_FROM:'+15005550006',TWILIO_WHATSAPP_FROM:'+15005550006',TWILIO_WHATSAPP_CONTENT_SID:'HXtest'};
+const n={phone:'9100852287',channel:'sms',message:'Your booking was accepted.'};assert.equal(internationalPhone(n.phone),'+919100852287');
+assert.equal((await sendMessage({},n,()=>{throw Error('must not call');})).status,'unconfigured');
+const sms=await sendMessage(env,n,async(url,options)=>{assert.match(url,/^https:\/\/api.twilio.com\//);assert.equal(options.body.get('To'),'+919100852287');assert.equal(options.body.get('Body'),n.message);return new Response(JSON.stringify({sid:'SMtest',status:'queued'}),{status:201});});assert.equal(sms.status,'submitted');
+await sendMessage(env,{...n,channel:'whatsapp'},async(url,options)=>{assert.equal(options.body.get('To'),'whatsapp:+919100852287');assert.equal(options.body.get('ContentSid'),'HXtest');assert.equal(options.body.has('Body'),false);return new Response(JSON.stringify({sid:'SMwa'}),{status:201});});
+assert.equal((await sendMessage(env,n,async()=>new Response(JSON.stringify({code:21608}),{status:400}))).status,'failed');
+assert.equal((await sendMessage(env,n,async()=>{throw Error('network timeout');})).status,'unknown');
+assert.equal((await sendMessage(env,{...n,phone:'bad'})).status,'failed');
+});

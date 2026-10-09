@@ -9,3 +9,5 @@ const cars=[['dzire','Maruti Suzuki Dzire','Sedan'],['baleno','Maruti Suzuki Bal
 await mkdir('dist/server',{recursive:true});await writeFile('dist/server/assets.mjs','export const assets='+JSON.stringify(assets)+';\nexport const defaults='+JSON.stringify({cars,locations})+';\n');await writeFile('dist/server/index.js',await readFile('server/worker.mjs','utf8'));console.log('GoRide Worker and dashboard built.');
 
 await writeFile('dist/server/customers.mjs',await readFile('server/customers.mjs','utf8'));
+
+await writeFile('dist/server/messaging.mjs',await readFile('server/messaging.mjs','utf8'));

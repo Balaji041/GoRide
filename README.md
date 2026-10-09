@@ -67,7 +67,7 @@ Android and iOS source exports validate compilation. Android test APKs use the e
 
 ## Other launch work still pending
 
-Automatic reservations, date-specific vehicle availability, app-owned phone/email sign-in, online payment verification and notifications are not implemented. Booking requests and customer records use the platform ChatGPT identity; they are not a reservation or payment system. Hiding a listing is not a booking calendar. Quote requests open WhatsApp for the customer to review/send; they do not create reservations. Confirm actual cars, rates, rental terms, business details and policies before launch.
+App-owned phone/email sign-in, online payment verification, native push and live WhatsApp/SMS delivery are not enabled. Accepted bookings now enforce date availability per car listing. Booking requests and customer records use the platform ChatGPT identity; they are not a reservation or payment system. Hiding a listing is not a booking calendar. Quote requests open WhatsApp for the customer to review/send; they do not create reservations. Confirm actual cars, rates, rental terms, business details and policies before launch.
 
 WhatsApp: +91 9100852287. Calls: +91 8610235694.
 
@@ -92,3 +92,22 @@ Stock photos do not show GoRide-owned cars or imply manufacturer endorsement. Wh
 - Feedback is owner-only. Reviews require a completed booking, customer permission and a rating from 1–5. They start pending; only approved reviews expose the chosen display name, rating, review and date. Do not approve reviews containing private customer details. No fabricated reviews are seeded.
 - Owner navigation adds **Bookings & customers** and **Reviews & feedback**. Mobile 1.3.0 retains **Bookings** and removes the Owner tab. Use the separate Admin Panel for management. Older APKs need replacement to show the clean customer navigation.
 - Automated Worker tests cover cross-customer isolation, admin authorization, CSRF origin checks, invalid booking data, document consent, private storage routing/deletion, completed-ride review eligibility and moderation. Android/iOS bundle export validates compilation only. Embedded sign-in and document picker still need testing on the user's phones.
+
+
+## Booking decisions and alerts
+
+Requests move from requested to confirmed (shown as Accepted), rejected or cancelled. Accepted bookings can be completed or cancelled; terminal decisions cannot be reopened. Acceptance requires an agreed whole-rupee rental total. Rejection/cancellation requires a customer-visible reason. A version check rejects stale decisions.
+
+A single atomic SQL update checks for overlapping confirmed/completed bookings for the same car listing. This prevents simultaneous owners accepting overlapping requests. New requests also reject dates occupied by an accepted/completed booking. Rental ranges are [pickup date, return date), so a returning car can be booked again on the return date. Each listing must represent one physical car; add separate listings for multiple cars of the same model. Cancelling releases dates; completed rentals keep their historical dates blocked. No payment collection or automatic document verification is added.
+
+D1 notifications are saved in the same transaction as the request/decision. Owner and customer screens refresh alerts every 20 seconds while open, and on focus. Each recipient can mark their own alerts read. Customers cannot read owner/other-customer alerts. These are in-app alerts, not background phone push. The existing Android/iPhone Bookings WebView loads this update automatically, with no new native dependency.
+
+### Optional Twilio WhatsApp/SMS adapter
+
+Messaging is inactive until runtime values are configured securely. Keep all keys server-side and out of EXPO_PUBLIC_* settings. See `.env.example` for names only. SMS needs TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_SMS_FROM. WhatsApp also needs TWILIO_WHATSAPP_FROM and an approved TWILIO_WHATSAPP_CONTENT_SID template whose variable {{1}} accepts the generic booking alert text. Business-initiated WhatsApp requires an approved template. Enable production messaging only after provider onboarding and end-to-end phone testing, including any applicable sender registration.
+
+Customer phone alerts are opt-in on the request form (none, SMS or WhatsApp), with an alert consent timestamp. Existing bookings remain in-app only. Owner alerts use GORIDE_OWNER_ALERT_CHANNEL and GORIDE_OWNER_ALERT_PHONE. Phone messages contain only booking references, car/dates or decision/price/note; no document images, identity numbers or private download links.
+
+Delivery runs after the saved transaction. Missing configuration or provider failure never rolls back a booking. Submitted means the provider accepted the request, not delivered to the handset. No status callback is implemented. The owner can retry explicitly rejected/unconfigured messages. Unknown responses and interrupted sending states require checking provider logs; they are not automatically retried to avoid duplicate billable messages. Messaging has been tested with a fake provider only; no real message has been sent or delivery verified.
+
+Official references: https://www.twilio.com/docs/messaging/api/message-resource and https://www.twilio.com/docs/whatsapp/tutorial/send-whatsapp-notification-messages-templates .
