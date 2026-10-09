@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `locations_name_unique` ON `locations` (lower("name"));
