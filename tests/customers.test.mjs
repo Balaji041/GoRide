@@ -11,17 +11,19 @@ const other={...headers,'oai-authenticated-user-id':'customer-b','oai-authentica
 const call=(path,method='GET',data,h=headers)=>mf.dispatchFetch('http://goride.test'+path,{method,headers:h,redirect:'manual',body:data===undefined?undefined:JSON.stringify(data)});
 assert.equal((await call('/account','GET',undefined,{})).status,302);
 assert.equal((await call('/account')).status,200);
+for(const path of ['/terms','/terms/','/privacy','/cancellation']){const response=await call(path);assert.equal(response.status,200,path);assert.match(await response.text(),/Private pre-launch draft/);}
 assert.equal((await call('/api/customer/bookings','GET',undefined,{})).status,401);
 assert.equal((await call('/api/admin/bookings')).status,403);
 const today=new Date(Date.now()+86400000).toISOString().slice(0,10),later=new Date(Date.now()+3*86400000).toISOString().slice(0,10);
-const input={id:crypto.randomUUID(),name:'Test Customer',age:28,phone:'9100852287',carId:'dzire',locationId:'bangalore',mode:'self',startDate:today,endDate:later,consent:true};
+const input={id:crypto.randomUUID(),name:'Test Customer',age:21,phone:'9100852287',carId:'dzire',locationId:'bangalore',mode:'self',startDate:today,endDate:later,consent:true};
 assert.equal((await call('/api/customer/bookings','POST',{...input,consent:false})).status,400);
 assert.equal((await call('/api/customer/bookings','POST',{...input,age:17})).status,400);
+assert.equal((await call('/api/customer/bookings','POST',{...input,age:20})).status,400);
 assert.equal((await call('/api/customer/bookings','POST',{...input,endDate:today})).status,400);
 assert.equal((await call('/api/customer/bookings','POST',input,{...headers,Origin:'https://evil.test'})).status,403);
 assert.equal((await call('/api/customer/bookings','POST',input)).status,201);
 assert.equal((await call('/api/customer/bookings','POST',input)).status,200);
-let data=await (await call('/api/customer/bookings')).json();assert.equal(data.bookings.length,1);assert.equal(data.bookings[0].status,'requested');assert.equal(data.bookings[0].age,28);
+let data=await (await call('/api/customer/bookings')).json();assert.equal(data.bookings.length,1);assert.equal(data.bookings[0].status,'requested');assert.equal(data.bookings[0].age,21);
 assert.equal((await (await call('/api/customer/bookings','GET',undefined,other)).json()).bookings.length,0);
 const png=Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6l1sAAAAASUVORK5CYII=','base64'));
 const uploadPath=`/api/customer/bookings/${input.id}/documents/aadhaar`;

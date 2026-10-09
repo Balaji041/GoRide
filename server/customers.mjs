@@ -37,6 +37,7 @@ const today=new Date(Date.now()+330*60000).toISOString().slice(0,10);
 if(!validDate(input.startDate)||!validDate(input.endDate)||input.startDate<today||input.endDate<=input.startDate)throw new ApiError(400,'Choose a pick-up from today and a later return date.');
 const catalogue=await readAll(db),car=catalogue.cars.find(c=>c.id===input.carId&&c.status==='active'),location=catalogue.locations.find(l=>l.id===input.locationId&&l.enabled);
 if(!car||!location||!car.locationIds.includes(location.id)||!['self','driver'].includes(input.mode)||!(input.mode==='self'?car.selfEnabled:car.driverEnabled))throw new ApiError(400,'This car or rental option is no longer available. Refresh and choose again.');
+if(input.mode==='self'&&input.age<21)throw new ApiError(400,'Self-drive drivers must be at least 21 years old.');
 const notifyVia=input.notifyVia||'none';if(!['none','sms','whatsapp'].includes(notifyVia)||notifyVia!=='none'&&(input.alertConsent!==true||!internationalPhone(phone)))throw new ApiError(400,'Confirm messaging consent and a valid phone number, or choose in-app updates only.');
 const now=new Date().toISOString(),noticeId='request:'+input.id,ownerChannel=['sms','whatsapp'].includes(env.GORIDE_OWNER_ALERT_CHANNEL)?env.GORIDE_OWNER_ALERT_CHANNEL:'none';
 const message='New GoRide booking request '+input.id.slice(0,8)+': '+car.name+', '+location.name+', '+input.startDate+' to '+input.endDate+'. Open your Admin Panel to accept or reject.';
