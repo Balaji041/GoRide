@@ -27,6 +27,15 @@ const latest=await db.prepare('SELECT name FROM bookings WHERE customer_id=? ORD
 const displayName=latest?.name?.trim().split(/\s+/)[0]||email.split('@')[0]?.replace(/[._-]+/g,' ').trim().split(/\s+/)[0]||'Rider';
 return json({email,displayName,phone:identity.phone,verifiedPhone:identity.verifiedPhone,verifiedEmail:identity.verifiedEmail||false,preview:identity.preview});}
 
+if(path==='/api/admin/bookings/calendar'&&method==='GET'){
+const month=url.searchParams.get('month')||'';if(!/^(20\d{2})-(0[1-9]|1[0-2])$/.test(month))throw new ApiError(400,'Choose a month between 2000 and 2099.');
+const [year,m]=month.split('-').map(Number),from=month+'-01T00:00',until=new Date(Date.UTC(year,m,1)).toISOString().slice(0,10)+'T00:00',car=url.searchParams.get('car')||'';
+if(car.length>100)throw new ApiError(400,'Choose a valid car.');
+const rows=await db.prepare("SELECT id,car_id,car_name,location,mode,name,status,start_date,end_date,pickup_time,return_time FROM bookings WHERE status IN ('requested','confirmed','completed') AND (start_date||'T'||COALESCE(pickup_time,'00:00'))<? AND (end_date||'T'||COALESCE(return_time,'00:00'))>? AND (?='' OR car_id=?) ORDER BY start_date,COALESCE(pickup_time,'00:00'),id LIMIT 1001").bind(until,from,car,car).all();
+if(rows.results.length>1000)throw new ApiError(422,'Too many bookings for this month. Select one car to view its calendar.');
+return json({month,bookings:rows.results,updatedAt:new Date().toISOString()});
+}
+
 if((path==='/api/customer/bookings'||path==='/api/admin/bookings')&&method==='GET'){
 const rows=await (admin?db.prepare('SELECT * FROM bookings ORDER BY created_at DESC LIMIT 200'):db.prepare('SELECT * FROM bookings WHERE customer_id=? ORDER BY created_at DESC LIMIT 200').bind(customerId)).all();
 const bookings=await Promise.all(rows.results.map(async row=>{const docs=await db.prepare('SELECT id,kind,created_at FROM documents WHERE booking_id=?').bind(row.id).all();const cancellations=await db.prepare('SELECT id,reason,status,created_at,decision_at,decision_note FROM cancellation_requests WHERE booking_id=? ORDER BY created_at DESC,id DESC').bind(row.id).all();const payments=await db.prepare("SELECT id,kind,amount,method,reference,note,created_at FROM payment_records WHERE booking_id=? ORDER BY created_at,id").bind(row.id).all();const {customer_id,...safe}=row;return {...safe,documents:docs.results,cancellations:cancellations.results,payments:payments.results};}));return json({bookings});}
