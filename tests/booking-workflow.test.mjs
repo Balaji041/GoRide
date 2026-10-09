@@ -9,14 +9,14 @@ try{const db=await mf.getD1Database('DB');for(const name of (await readdir('driz
 const a={'oai-authenticated-user-id':'customer-a','oai-authenticated-user-email':'a@example.test','Content-Type':'application/json','Origin':'http://goride.test'},b={...a,'oai-authenticated-user-id':'customer-b'},owner={...a,'oai-authenticated-user-email':'nagendra@headrun.com'};
 const call=(path,method='GET',data,h=a)=>mf.dispatchFetch('http://goride.test'+path,{method,headers:h,body:data===undefined?undefined:JSON.stringify(data)});
 const date=d=>new Date(Date.now()+d*86400000).toISOString().slice(0,10);
-const input={id:crypto.randomUUID(),name:'Customer A',age:25,phone:'9100852287',carId:'dzire',locationId:'bangalore',mode:'self',startDate:date(5),endDate:date(8),consent:true,notifyVia:'sms',alertConsent:true};
+const input={id:crypto.randomUUID(),name:'Customer A',age:25,phone:'9100852287',carId:'dzire',locationId:'bangalore',mode:'self',pickupTime:'09:00',returnTime:'09:00',pickupAddress:'Test pickup landmark',returnAddress:'Test return landmark',startDate:date(5),endDate:date(8),consent:true,notifyVia:'sms',alertConsent:true};
 assert.equal((await call('/api/customer/bookings','POST',{...input,alertConsent:false})).status,400);
 assert.equal((await call('/api/customer/bookings','POST',input)).status,201);
 assert.equal((await call('/api/customer/bookings','POST',input)).status,200);
 const second={...input,id:crypto.randomUUID(),name:'Customer B'};assert.equal((await call('/api/customer/bookings','POST',second,b)).status,201);
 let notices=(await (await call('/api/admin/notifications','GET',undefined,owner)).json()).notifications;assert.equal(notices.length,2);assert.equal((await call('/api/admin/notifications')).status,403);
 assert.equal((await call('/api/admin/bookings/'+input.id,'PUT',{status:'confirmed',version:1},owner)).status,400);
-const decide=(id,status='confirmed',version=1,note='')=>call('/api/admin/bookings/'+id,'PUT',{status,version,note,quotedTotal:4000},owner);
+const decide=(id,status='confirmed',version=1,note='')=>call('/api/admin/bookings/'+id,'PUT',{status,version,note,quotedTotal:4000,quoteDetails:{baseFare:4000,deliveryFee:0,driverAllowance:0,taxAmount:0,deposit:3000,includedKm:300,includedHours:72,extraKmRate:12,extraHourRate:150,fuel:'same-level',tollsParking:'at-actuals',permits:'at-actuals'}},owner);
 const race=await Promise.all([decide(input.id),decide(second.id)]);assert.deepEqual(race.map(r=>r.status).sort(),[200,409]);
 const win=race[0].status===200?input:second,lose=win===input?second:input,winnerHeaders=win===input?a:b,loserHeaders=win===input?b:a;
 assert.equal((await call('/api/customer/bookings','POST',{...input,id:crypto.randomUUID()})).status,409);

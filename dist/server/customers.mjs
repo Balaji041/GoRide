@@ -33,8 +33,12 @@ const name=text(input.name,'Full name',100),phone=text(input.phone,'Phone number
 if(identity.verifiedPhone&&internationalPhone(phone)!==identity.phone)throw new ApiError(400,'Use your verified mobile number for this booking.');
 if(!Number.isInteger(input.age)||input.age<18||input.age>100)throw new ApiError(400,'Enter an age from 18 to 100.');if(input.consent!==true)throw new ApiError(400,'Please consent to using your details for this rental request.');
 const validDate=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&!Number.isNaN(Date.parse(value))&&new Date(value).toISOString().slice(0,10)===value;
-const today=new Date(Date.now()+330*60000).toISOString().slice(0,10);
-if(!validDate(input.startDate)||!validDate(input.endDate)||input.startDate<today||input.endDate<=input.startDate)throw new ApiError(400,'Choose a pick-up from today and a later return date.');
+const validTime=value=>typeof value==='string'&&/^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+if(!validDate(input.startDate)||!validDate(input.endDate)||!validTime(input.pickupTime)||!validTime(input.returnTime))throw new ApiError(400,'Choose valid pick-up and return dates and times (Indian Standard Time).');
+const starts=input.startDate+'T'+input.pickupTime,ends=input.endDate+'T'+input.returnTime;
+if(Date.parse(starts+':00+05:30')<=Date.now()||ends<=starts)throw new ApiError(400,'Choose a future pick-up and a return later than pick-up.');
+const pickupAddress=text(input.pickupAddress,'Pick-up address or landmark',300),returnAddress=text(input.returnAddress,'Return address or landmark',300);
+const tripNotes=typeof input.tripNotes==='string'?input.tripNotes.trim():'';if(tripNotes.length>1000)throw new ApiError(400,'Trip notes must be 1,000 characters or fewer.');
 const catalogue=await readAll(db),car=catalogue.cars.find(c=>c.id===input.carId&&c.status==='active'),location=catalogue.locations.find(l=>l.id===input.locationId&&l.enabled);
 if(!car||!location||!car.locationIds.includes(location.id)||!['self','driver'].includes(input.mode)||!(input.mode==='self'?car.selfEnabled:car.driverEnabled))throw new ApiError(400,'This car or rental option is no longer available. Refresh and choose again.');
 if(input.mode==='self'&&input.age<21)throw new ApiError(400,'Self-drive drivers must be at least 21 years old.');
@@ -42,7 +46,7 @@ const notifyVia=input.notifyVia||'none';if(!['none','sms','whatsapp'].includes(n
 const now=new Date().toISOString(),noticeId='request:'+input.id,ownerChannel=['sms','whatsapp'].includes(env.GORIDE_OWNER_ALERT_CHANNEL)?env.GORIDE_OWNER_ALERT_CHANNEL:'none';
 const message='New GoRide booking request '+input.id.slice(0,8)+': '+car.name+', '+location.name+', '+input.startDate+' to '+input.endDate+'. Open your Admin Panel to accept or reject.';
 const results=await db.batch([
-db.prepare("INSERT OR IGNORE INTO bookings (id,customer_id,email,name,age,phone,car_id,car_name,location,mode,start_date,end_date,status,created_at,consent_at,notify_via,alert_consent_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM bookings WHERE car_id=? AND status IN ('confirmed','completed') AND start_date<? AND end_date>?)").bind(input.id,customerId,email,name,input.age,phone,car.id,car.name,location.name,input.mode,input.startDate,input.endDate,'requested',now,now,notifyVia,notifyVia==='none'?null:now,car.id,input.endDate,input.startDate),
+db.prepare("INSERT OR IGNORE INTO bookings (id,customer_id,email,name,age,phone,car_id,car_name,location,mode,start_date,end_date,status,created_at,consent_at,notify_via,alert_consent_at,pickup_time,return_time,pickup_address,return_address,trip_notes) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM bookings WHERE car_id=? AND status IN ('confirmed','completed') AND (start_date||'T'||COALESCE(pickup_time,'00:00'))<? AND (end_date||'T'||COALESCE(return_time,'00:00'))>?)").bind(input.id,customerId,email,name,input.age,phone,car.id,car.name,location.name,input.mode,input.startDate,input.endDate,'requested',now,now,notifyVia,notifyVia==='none'?null:now,input.pickupTime,input.returnTime,pickupAddress,returnAddress,tripNotes,car.id,ends,starts),
 db.prepare('INSERT OR IGNORE INTO notifications (id,recipient,booking_id,message,created_at,channel,phone) SELECT ?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM bookings WHERE id=? AND customer_id=?)').bind(noticeId,'owner',input.id,message,now,ownerChannel,env.GORIDE_OWNER_ALERT_PHONE||'',input.id,customerId)]);
 if(!results[0].meta.changes){const saved=await db.prepare('SELECT id FROM bookings WHERE id=? AND customer_id=?').bind(input.id,customerId).first();if(saved)return json(saved);throw new ApiError(409,'This car is already booked for those dates. Choose another car or different dates.');}
 notify(noticeId);return json({id:input.id,status:'requested'},201);}
@@ -51,13 +55,16 @@ if(statusMatch&&method==='PUT'){
 const row=await booking(statusMatch[1]),input=await body(request);if(input.version!==row.version)throw new ApiError(409,'This booking changed. Refresh before deciding.');
 if(!transitions[row.status]?.includes(input.status))throw new ApiError(400,'This booking cannot move to that status.');
 const note=typeof input.note==='string'?input.note.trim():'';if(note.length>1000||['rejected','cancelled'].includes(input.status)&&!note)throw new ApiError(400,'Enter a reason (up to 1,000 characters).');
+let quoteDetails=row.quote_details;
+if(input.status==='confirmed'){quoteDetails=JSON.stringify(validateQuote(input.quoteDetails,ApiError));}
 const quote=input.status==='confirmed'?input.quotedTotal:row.quoted_total;if(input.status==='confirmed'&&(!Number.isSafeInteger(quote)||quote<0||quote>10000000))throw new ApiError(400,'Enter the agreed rental total in whole rupees.');
+if(input.status==='confirmed'&&JSON.parse(quoteDetails).total!==quote)throw new ApiError(400,'The rental total must equal base fare, delivery, driver allowance and tax.');
 if(input.status==='confirmed'){const catalogue=await readAll(db),car=catalogue.cars.find(c=>c.id===row.car_id&&c.status==='active');if(!car||!catalogue.locations.some(l=>l.enabled&&l.name===row.location))throw new ApiError(409,'The car or location is no longer active. Check the request before accepting.');}
 const now=new Date().toISOString(),nextVersion=row.version+1,noticeId='decision:'+row.id+':'+nextVersion;
 const action={confirmed:'accepted',rejected:'rejected',cancelled:'cancelled',completed:'completed'}[input.status];
 const message='GoRide booking '+row.id.slice(0,8)+' was '+action+'.'+(input.status==='confirmed'?' Agreed rental total: INR '+quote+'.':'')+(note?' '+note:'')+' Open My bookings for details.';
 const results=await db.batch([
-db.prepare("UPDATE bookings SET status=?,decision_note=?,quoted_total=?,version=version+1,updated_at=? WHERE id=? AND version=? AND (?!='confirmed' OR NOT EXISTS (SELECT 1 FROM bookings b WHERE b.car_id=bookings.car_id AND b.id!=bookings.id AND b.status IN ('confirmed','completed') AND b.start_date<bookings.end_date AND b.end_date>bookings.start_date))").bind(input.status,note,quote,now,row.id,row.version,input.status),
+db.prepare("UPDATE bookings SET status=?,decision_note=?,quoted_total=?,quote_details=?,version=version+1,updated_at=? WHERE id=? AND version=? AND (?!='confirmed' OR NOT EXISTS (SELECT 1 FROM bookings b WHERE b.car_id=bookings.car_id AND b.id!=bookings.id AND b.status IN ('confirmed','completed') AND (b.start_date||'T'||COALESCE(b.pickup_time,'00:00'))<(bookings.end_date||'T'||COALESCE(bookings.return_time,'00:00')) AND (b.end_date||'T'||COALESCE(b.return_time,'00:00'))>(bookings.start_date||'T'||COALESCE(bookings.pickup_time,'00:00'))))").bind(input.status,note,quote,quoteDetails,now,row.id,row.version,input.status),
 db.prepare('INSERT OR IGNORE INTO notifications (id,recipient,booking_id,message,created_at,channel,phone) SELECT ?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM bookings WHERE id=? AND version=? AND status=?)').bind(noticeId,row.customer_id,row.id,message,now,row.notify_via,row.phone,row.id,nextVersion,input.status)]);
 if(!results[0].meta.changes)throw new ApiError(409,'This car has an overlapping accepted booking, or this request changed. Refresh before deciding.');
 notify(noticeId);return json({saved:true,status:input.status,version:nextVersion});}
@@ -85,4 +92,18 @@ if(path==='/api/admin/feedback'&&method==='GET'){const rows=await db.prepare('SE
 const reviewMatch=path.match(/^\/api\/admin\/feedback\/([a-f0-9-]+)$/);
 if(reviewMatch&&method==='PUT'){const input=await body(request),row=await db.prepare('SELECT * FROM feedback WHERE id=?').bind(reviewMatch[1]).first();if(!row)throw new ApiError(404,'Feedback not found.');if(!(row.kind==='review'?['approved','hidden']:['pending','resolved']).includes(input.status))throw new ApiError(400,'Choose a valid status.');await db.prepare('UPDATE feedback SET status=? WHERE id=?').bind(input.status,row.id).run();return json({saved:true});}
 throw new ApiError(404,'This action is not available.');
+}
+
+function validateQuote(value,ApiError){
+if(!value||typeof value!=='object'||Array.isArray(value))throw new ApiError(400,'Complete the quote details before accepting.');
+const quote={version:1};
+for(const field of ['baseFare','deliveryFee','driverAllowance','taxAmount','deposit','includedKm','includedHours','extraKmRate','extraHourRate']){
+const n=value[field];if(!Number.isSafeInteger(n)||n<0||n>10000000)throw new ApiError(400,'Quote amounts, kilometres and hours must be non-negative whole numbers.');quote[field]=n;
+}
+if(quote.includedHours<1)throw new ApiError(400,'Enter at least one included hour.');
+for(const [key,allowed] of Object.entries({fuel:['same-level','included','customer-pays'],tollsParking:['included','at-actuals'],permits:['included','at-actuals']})){
+if(!allowed.includes(value[key]))throw new ApiError(400,'Choose the fuel, toll/parking and permit arrangements.');quote[key]=value[key];}
+quote.total=quote.baseFare+quote.deliveryFee+quote.driverAllowance+quote.taxAmount;
+if(quote.total>10000000)throw new ApiError(400,'Rental total is too large.');
+return quote;
 }

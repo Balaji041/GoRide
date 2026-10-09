@@ -15,7 +15,7 @@ for(const path of ['/terms','/terms/','/privacy','/cancellation']){const respons
 assert.equal((await call('/api/customer/bookings','GET',undefined,{})).status,401);
 assert.equal((await call('/api/admin/bookings')).status,403);
 const today=new Date(Date.now()+86400000).toISOString().slice(0,10),later=new Date(Date.now()+3*86400000).toISOString().slice(0,10);
-const input={id:crypto.randomUUID(),name:'Test Customer',age:21,phone:'9100852287',carId:'dzire',locationId:'bangalore',mode:'self',startDate:today,endDate:later,consent:true};
+const input={id:crypto.randomUUID(),name:'Test Customer',age:21,phone:'9100852287',carId:'dzire',locationId:'bangalore',mode:'self',pickupTime:'09:00',returnTime:'09:00',pickupAddress:'Test pickup landmark',returnAddress:'Test return landmark',startDate:today,endDate:later,consent:true};
 assert.equal((await call('/api/customer/bookings','POST',{...input,consent:false})).status,400);
 assert.equal((await call('/api/customer/bookings','POST',{...input,age:17})).status,400);
 assert.equal((await call('/api/customer/bookings','POST',{...input,age:20})).status,400);
@@ -39,7 +39,7 @@ assert.equal((await call('/api/admin/documents/'+document.id,'GET',undefined,own
 const record=await db.prepare('SELECT storage_key FROM documents WHERE id=?').bind(document.id).first();assert.match(record.storage_key,/^private\//);assert.equal((await call('/media/'+record.storage_key,'GET',undefined,{})).status,404);
 const review={id:crypto.randomUUID(),kind:'review',bookingId:input.id,displayName:'Test first name',rating:5,message:'A smooth journey.',publishConsent:true};
 assert.equal((await call('/api/customer/feedback','POST',review)).status,400);
-assert.equal((await call('/api/admin/bookings/'+input.id,'PUT',{status:'confirmed',version:1,quotedTotal:3000},owner)).status,200);
+assert.equal((await call('/api/admin/bookings/'+input.id,'PUT',{status:'confirmed',version:1,quotedTotal:3000,quoteDetails:{baseFare:3000,deliveryFee:0,driverAllowance:0,taxAmount:0,deposit:3000,includedKm:300,includedHours:48,extraKmRate:12,extraHourRate:150,fuel:'same-level',tollsParking:'at-actuals',permits:'at-actuals'}},owner)).status,200);
 assert.equal((await call('/api/admin/bookings/'+input.id,'PUT',{status:'completed',version:2},owner)).status,200);
 assert.equal((await call('/api/customer/feedback','POST',review,other)).status,404);
 assert.equal((await call('/api/customer/feedback','POST',review)).status,201);

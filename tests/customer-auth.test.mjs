@@ -25,7 +25,7 @@ const identity=await customerIdentity(new Request('https://goride.test',{headers
 assert.equal(await customerIdentity(new Request('https://goride.test',{headers:{Cookie:SESSION_COOKIE+'='+'0'.repeat(64)}}),env),null);
 await assert.rejects(call('/api/customer-auth/check',{challengeId:start.challengeId,code:'123456'}),e=>e.status===400);
 assert.equal((await mf.dispatchFetch('https://goride.test/api/admin/session',{headers:{Cookie:cookie}})).status,401);
-const booking={id:crypto.randomUUID(),name:'Verified customer',phone:'+919100852287',age:25,carId:'dzire',locationId:'bangalore',mode:'self',startDate:'2030-01-01',endDate:'2030-01-03',consent:true};
+const booking={id:crypto.randomUUID(),name:'Verified customer',phone:'+919100852287',age:25,carId:'dzire',locationId:'bangalore',mode:'self',pickupTime:'09:00',returnTime:'09:00',pickupAddress:'Test pickup landmark',returnAddress:'Test return landmark',startDate:'2030-01-01',endDate:'2030-01-03',consent:true};
 const api=(data,c=cookie)=>mf.dispatchFetch('https://goride.test/api/customer/bookings',{method:'POST',headers:{Cookie:c,Origin:'https://goride.test','Content-Type':'application/json'},body:JSON.stringify(data)});
 assert.equal((await api({...booking,phone:'8610235694'})).status,400);assert.equal((await api(booking)).status,201);
 const second=await (await call('/api/customer-auth/start',{phone:'8610235694',consent:true})).json();const secondAuth=await call('/api/customer-auth/check',{challengeId:second.challengeId,code:'123456'});const cookieB=secondAuth.headers.get('set-cookie').split(';')[0];

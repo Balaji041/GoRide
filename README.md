@@ -144,3 +144,9 @@ Customer web and native screens share midnight navy (#101e33), cobalt blue (#255
 The marketing banner rotates three representative car photos every six seconds; users can select a slide or pause it. Reduced-motion settings disable autoplay. Vehicle cards have swipeable, keyboard-accessible front/rear galleries. Owners can upload up to seven extra photos per listing through Edit car; each gallery photo is validated server-side and stored in the existing car JSON. Existing single-photo rows receive the verified default rear view only if their cover still matches the original launch photo; owner-supplied covers are preserved without assumed gallery images. An explicitly empty gallery suppresses defaults.
 
 The old footer and mobile Help credit lists were removed. Required Commons attribution remains on /image-information, linked by a discreet info button on credited photos. Own photos with no required attribution do not show the info button. Hero photos use the Unsplash License. Images are representative and do not establish actual fleet inventory.
+
+
+## Booking details — October 2026
+Customer requests require pickup/return dates and HH:mm times in IST, meeting-point addresses and optional trip notes. Same-day trips are supported; exact accepted time intervals are checked atomically for conflicts. Existing date-only records retain legacy midnight boundaries and display a time-to-confirm label.
+
+Owner acceptance requires a whole-rupee quote breakdown with kilometre/hour allowances, extra rates, deposit, fuel, toll/parking and permit arrangements. Rental total excludes the refundable deposit. Agreed quote snapshots persist on the booking and remain visible after completion or cancellation. Prices and terms must still be discussed with the customer; no online payment or automatic tax computation is implemented. The customer app uses the same protected booking WebView, so this update does not require a native build.

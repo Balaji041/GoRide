@@ -1,0 +1,31 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile,readdir} from 'node:fs/promises';
+import {Miniflare} from 'miniflare';
+test('Timed trips validate IST, persist private meeting points and enforce atomic overlaps and complete quotes',async()=>{
+const mf=new Miniflare({modules:true,scriptPath:'dist/server/index.js',compatibilityDate:'2026-01-01',d1Databases:['DB'],r2Buckets:['BUCKET']});
+try{const db=await mf.getD1Database('DB');for(const name of (await readdir('drizzle')).filter(n=>n.endsWith('.sql')).sort())for(const sql of (await readFile('drizzle/'+name,'utf8')).split('--> statement-breakpoint'))if(sql.trim())await db.prepare(sql.trim()).run();
+const headers={'oai-authenticated-user-id':'customer-details','oai-authenticated-user-email':'details@example.test','Content-Type':'application/json',Origin:'http://goride.test'};
+const owner={...headers,'oai-authenticated-user-email':'nagendra@headrun.com'},other={...headers,'oai-authenticated-user-id':'another-customer'};
+const call=(path,method='GET',data,h=headers)=>mf.dispatchFetch('http://goride.test'+path,{method,headers:h,body:data===undefined?undefined:JSON.stringify(data)});
+const date=new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+const input={id:crypto.randomUUID(),name:'Details Test',age:25,phone:'9100852287',carId:'dzire',locationId:'bangalore',mode:'self',startDate:date,endDate:date,pickupTime:'09:00',returnTime:'12:00',pickupAddress:'Private test pickup',returnAddress:'Private test return',tripNotes:'Discuss interstate permits',consent:true};
+for(const change of [{pickupTime:'24:00'},{returnTime:'08:59'},{returnTime:'09:00'},{pickupAddress:''},{returnAddress:''},{tripNotes:'x'.repeat(1001)},{startDate:'2020-01-01',endDate:'2020-01-01'},{pickupTime:undefined}])assert.equal((await call('/api/customer/bookings','POST',{...input,...change})).status,400,JSON.stringify(change));
+assert.equal((await call('/api/customer/bookings','POST',input)).status,201);
+assert.equal((await call('/api/customer/bookings','POST',input)).status,200,'retry is idempotent');
+const getMine=async()=> (await (await call('/api/customer/bookings')).json()).bookings;
+let mine=(await getMine())[0];assert.equal(mine.pickup_time,'09:00');assert.equal(mine.return_address,input.returnAddress);assert.equal(mine.trip_notes,input.tripNotes);
+assert.equal((await (await call('/api/customer/bookings','GET',undefined,other)).json()).bookings.length,0);
+const quoteDetails={baseFare:2000,deliveryFee:200,driverAllowance:0,taxAmount:100,deposit:3000,includedKm:150,includedHours:3,extraKmRate:12,extraHourRate:150,fuel:'same-level',tollsParking:'at-actuals',permits:'at-actuals'};
+const accept=(id,patch={},h=owner)=>call('/api/admin/bookings/'+id,'PUT',{status:'confirmed',version:1,quotedTotal:2300,quoteDetails,...patch},h);
+assert.equal((await accept(input.id,{},headers)).status,403);
+for(const patch of [{quotedTotal:2200},{quoteDetails:null},{quoteDetails:{...quoteDetails,deposit:-1}},{quoteDetails:{...quoteDetails,baseFare:1.5}},{quoteDetails:{...quoteDetails,fuel:'unknown'}},{quoteDetails:{...quoteDetails,includedHours:0}}])assert.equal((await accept(input.id,patch)).status,400);
+const clash={...input,id:crypto.randomUUID(),pickupTime:'11:00',returnTime:'13:00'};assert.equal((await call('/api/customer/bookings','POST',clash)).status,201);
+const race=await Promise.all([accept(input.id),accept(clash.id)]);assert.deepEqual(race.map(r=>r.status).sort(),[200,409]);
+const winning= race[0].status===200?input:clash;
+assert.equal((await call('/api/customer/bookings','POST',{...input,id:crypto.randomUUID(),pickupTime:'11:30',returnTime:'12:30'})).status,409);
+const adjacent={...input,id:crypto.randomUUID(),pickupTime:winning.returnTime,returnTime:'15:00'};assert.equal((await call('/api/customer/bookings','POST',adjacent)).status,201);assert.equal((await accept(adjacent.id)).status,200);
+mine=(await getMine()).find(b=>b.id===winning.id);const saved=JSON.parse(mine.quote_details);assert.equal(saved.total,2300);assert.equal(saved.deposit,3000);assert.equal(saved.extraKmRate,12);assert.equal(mine.quoted_total,2300);
+assert.equal((await call('/api/admin/bookings/'+winning.id,'PUT',{status:'completed',version:2},owner)).status,200);mine=(await getMine()).find(b=>b.id===winning.id);assert.equal(JSON.parse(mine.quote_details).total,2300,'completion preserves agreed quote');
+}finally{await mf.dispose();}
+});
